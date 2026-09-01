@@ -1,0 +1,48 @@
+var KOFC = KOFC || {};
+KOFC.Task = KOFC.Task || {};
+
+KOFC.Task.filterActivityFor = function (executionContext) {
+    "use strict";
+
+    try {
+        var formContext = executionContext.getFormContext();
+
+        // Only run for Task
+        if (formContext.data.entity.getEntityName() !== "task") {
+            return;
+        }
+
+        var control = formContext.getControl("kofc_activityfor");
+
+        if (!control) {
+            console.warn(
+                "KOFC.Task.filterActivityFor: kofc_activityfor control not found."
+            );
+            return;
+        }
+
+        // Task options - alphabetical order
+        var allowedOptions = [
+            { text: "Annuity",    value: 258510007 },
+            { text: "Fraternal",  value: 258510001 },
+            { text: "Insurance",  value: 258510000 },
+            { text: "Membership", value: 258510008 },
+            { text: "Payments",   value: 258510009 },
+            { text: "Taxation",   value: 258510010 }
+        ];
+
+        // Remove all existing options
+        control.clearOptions();
+
+        // Add allowed options back in alphabetical order
+        allowedOptions.forEach(function (option, index) {
+            control.addOption(option, index);
+        });
+
+    } catch (error) {
+        console.error(
+            "KOFC.Task.filterActivityFor error:",
+            error
+        );
+    }
+};
