@@ -46,3 +46,494 @@ KOFC.Task.filterActivityFor = function (executionContext) {
         );
     }
 };
+
+////////////////
+
+//Author: Susmitha Thokala
+//#US - 2249
+//created quickCreateOnLoad
+//Date: 06/21/2023
+//*
+var executionContext;
+
+var opportunityType = { Charity: 258510001, CouncilReactivation: 258510008, InstitutionalInvestment: 258510003, NeedInsurance: 258510000, NewCouncilDevelopment: 258510007, NewMember: 258510006, RetailInvestment: 258510002, KCCF: 258510004, EstablishCor: 258510005, RecruitingFA: 258510009 };
+var activityFor = { Insurance: 258510000, Fraternal: 258510001, InstitutionalInvestment: 258510002, RetailInvestment: 258510003, Charity: 258510004, KCCF: 258510005, Recruiting: 258510006 };
+var activity = { Appointment: 258510000, Email: 258510001, PhoneCall: 258510002, Task: 258510003 };
+var activityType = { PhoneCall: "phonecall", Email: "email", Appintment: "appointment", Task: "task" };
+var regaringEntityType = { Case: "incident", Lead: "lead", Opportunity: "opportunity", Institution: "account", Contact: "contact" };
+var customerServiceQueue = { EntityId: 'efc76dc6-31f0-ee11-904c-000d3a578997', EntityType: 'queue', EntityName: 'Customer Service' };
+
+
+function onLoad(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        formContext.ui.clearFormNotification("ErrorMessage");
+        console.log("page loaded successfully");
+        LockFieldBasedOnValue(executionContext);
+        FilterActivityForLookup(executionContext);
+        SetEmailFromIfRegardingisCase(executionContext);
+        ShowHideActivityForOnTask(executionContext);
+        toggleActivityType(executionContext);
+        var activityForAttr = formContext.getAttribute("kofc_activityfor");
+        if (activityForAttr) {
+        activityForAttr.removeOnChange(toggleActivityType);
+        activityForAttr.addOnChange(toggleActivityType);
+       }
+    } catch (error) {
+        formContext.ui.setFormNotification("Error in QuickCreateOnLoad" + error.message, ERROR, "ErrorMessage");
+    }
+}
+function QuickCreateOnLoad(executionContext) {
+
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        formContext.ui.clearFormNotification("ErrorMessage");
+        var parentRecordReference = Xrm.Utility.getPageContext().input.createFromEntity;
+        //if this variable is null then Quick Create Form was called from the Global Menu
+        //or from some other code without setting the parent record context
+        if (parentRecordReference === null) {
+            return;
+        }
+        if (parentRecordReference.entityType == "opportunity") {
+            Xrm.WebApi.retrieveRecord(parentRecordReference.entityType, parentRecordReference.id, "?$select=name,kofc_opportunitytype").then(
+
+                function success(result) {
+                    if (result.kofc_opportunitytype === opportunityType.Charity) {
+                        SetActivityForSelectedOpportunityType(formContext, activityFor.Charity);
+                    }
+                    if ((result.kofc_opportunitytype === opportunityType.CouncilReactivation) || (result.kofc_opportunitytype === opportunityType.NewCouncilDevelopment) || (result.kofc_opportunitytype === opportunityType.NewMember) || (result.kofc_opportunitytype === opportunityType.EstablishCor)) {
+                        SetActivityForSelectedOpportunityType(formContext, activityFor.Fraternal);
+                    }
+                    if (result.kofc_opportunitytype === opportunityType.InstitutionalInvestment) {
+                        SetActivityForSelectedOpportunityType(formContext, activityFor.InstitutionalInvestment);
+                    }
+                    if (result.kofc_opportunitytype === opportunityType.RetailInvestment) {
+                        SetActivityForSelectedOpportunityType(formContext, activityFor.RetailInvestment);
+                    }
+                    if (result.kofc_opportunitytype === opportunityType.NeedInsurance) {
+                        SetActivityForSelectedOpportunityType(formContext, activityFor.Insurance);
+                    }
+                    if (result.kofc_opportunitytype === opportunityType.KCCF) {
+                        SetActivityForSelectedOpportunityType(formContext, activityFor.KCCF);
+                    }
+                    if (result.kofc_opportunitytype === opportunityType.RecruitingFA) {
+                        SetActivityForSelectedOpportunityType(formContext, activityFor.Recruiting);
+                    }
+                },
+                function (error) {
+                    formContext.ui.setFormNotification(err.message, ERROR, "ErrorMessage");
+                    return false;
+                });
+        }
+    }
+    catch (err) {
+        formContext.ui.setFormNotification("Error in QuickCreateOnLoad" + err.message, ERROR, "ErrorMessage");
+        return false;
+    }
+}
+
+function SetActivityForSelectedOpportunityType(formContext, activityForType) {
+    "use strict";
+    formContext.getControl('kofc_activityfor').getAttribute().setValue(activityForType);
+    if (formContext.getControl('kofc_activityfor') !== null) {
+        formContext.getControl('kofc_activitytypevalue').addPreSearch(AddActivityType);
+        formContext.getControl('kofc_activityfor').setDisabled(true);
+    }
+    else {
+        formContext.getControl('kofc_activityfor').setDisabled(false);
+    }
+}
+
+///*
+//Author: Rama Seshu
+//#US - 1516
+//created on Change
+//Date: 07/11/2023
+//*
+
+function FilterActivityForLookup(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    if (formContext.getControl('kofc_activityfor') !== null) {
+        formContext.getControl('kofc_activitytypevalue').addPreSearch(AddActivityType);
+    }
+}
+
+function AddActivityType(executionContext) {
+    "use strict";
+    var activityForOptionSet;
+    var ActivityTypeValue;
+    var formContext = executionContext.getFormContext();
+    var fetchQuery;
+    try {
+        var EntityType = formContext.data.entity.getEntityName();
+
+        if (EntityType === activityType.PhoneCall) {
+            ActivityTypeValue = activity.PhoneCall;
+        }
+        else if (EntityType === activityType.Email) {
+            ActivityTypeValue = activity.Email;
+        }
+        else if (EntityType === activityType.Appintment) {
+            ActivityTypeValue = activity.Appointment;
+        }
+        else if (EntityType === activityType.Task) {
+            ActivityTypeValue = activity.Task;
+        }
+
+        activityForOptionSet = formContext.getControl('kofc_activityfor').getAttribute().getValue();
+        if (activityForOptionSet !== null && activityForOptionSet !== undefined) {
+            fetchQuery = "<filter type='and'><condition attribute = 'kofc_activityfor' operator = 'eq' value = '" + activityForOptionSet + "' /><condition attribute = 'kofc_activity' operator = 'eq' value = '" + ActivityTypeValue + "' /></filter>";
+            formContext.getControl('kofc_activitytypevalue').addCustomFilter(fetchQuery);
+            formContext.getAttribute('kofc_activityfor').addOnChange(ClearActivityType);
+        }
+    }
+    catch (e) {
+        Xrm.Navigation.openAlertDialog('AddActivityType Error: ' + (e.description || e.message));
+    }
+}
+
+function ClearActivityType(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    formContext.getAttribute('kofc_activitytypevalue').setValue(null);
+}
+
+// Function to lock or unlock "Activity For" based on its value
+function LockFieldBasedOnValue(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    // Get the field
+    var activityFor = formContext.getAttribute("kofc_activityfor");
+
+    if (activityFor) {
+        // Check if the field has a value
+        var activityForValue = activityFor.getValue();
+
+        // Lock or unlock the field based on the value
+        if (activityForValue !== null && activityForValue !== undefined && activityForValue !== "") {
+            // Field has a value, so lock it
+            formContext.getControl("kofc_activityfor").setDisabled(true);
+        } else {
+            // Field is empty, so unlock it
+            formContext.getControl("kofc_activityfor").setDisabled(false);
+        }
+    }
+}
+
+/*
+Author: Bheemesh 
+#US - 13903
+Set Subject with Case Id if Regarding is Case while Email Creation
+Date: 23/02/2024
+*/
+function SetEmailSubjectIfRegardingisCase(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        // Get Activity Type and Check it is Email
+        var EntityType = formContext.data.entity.getEntityName();
+        if (EntityType === activityType.Email) {
+            // Get the field
+            var regardingEntity = formContext.getAttribute("regardingobjectid").getValue();
+            if (regardingEntity !== null) {
+                var regardingEntityId = regardingEntity[0].id;
+                var regardingEntityName = regardingEntity[0].entityType;
+
+                if (regardingEntityName === regaringEntityType.Case) {
+                    var req = new XMLHttpRequest();
+                    var globalContext = Xrm.Utility.getGlobalContext();
+                    req.open("GET", globalContext.getClientUrl() + "/api/data/v9.2/incidents(" + regardingEntityId.slice(1, -1) + ")?$select=ticketnumber", false);
+                    req.setRequestHeader("OData-MaxVersion", "4.0");
+                    req.setRequestHeader("OData-Version", "4.0");
+                    req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+                    req.setRequestHeader("Accept", "application/json");
+                    req.setRequestHeader("Prefer", "odata.include-annotations=*");
+                    req.send();
+                    if (req.status === 200) {
+                        var result = JSON.parse(req.response);
+                        var caseNumber = result["ticketnumber"];
+                        var emailSubject = formContext.getAttribute("subject").getValue();
+                        if (emailSubject !== null && caseNumber !== null && !emailSubject.includes(caseNumber)) {
+                            emailSubject += " : " + caseNumber;
+                            // Update Subject with Case Number
+                            formContext.getAttribute("subject").setValue(emailSubject);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('Error in SetEmailSubjectIfRegardingisCase: ' + (error.description || error.message));
+    }
+}
+
+/*
+Author: Bheemesh 
+#US - 16471
+Set From Address as Customer.Service@kofc.org if Regarding is Case while Email Creation/Response
+Date: 19/03/2024
+*/
+function SetEmailFromIfRegardingisCase(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        // Get Activity Type and Check it is Email
+        var EntityType = formContext.data.entity.getEntityName();
+        //var emailDirectionCode = formContext.getAttribute("directioncode").getValue();
+        var formType = formContext.ui.getFormType();
+        if (EntityType === activityType.Email && (formType === 1 || formType === 2)) {
+            // Get the field
+            var regardingEntity = formContext.getAttribute("regardingobjectid").getValue();
+            if (regardingEntity !== null) {
+                var regardingEntityName = regardingEntity[0].entityType;
+                if (regardingEntityName === regaringEntityType.Case) {
+                    // Update Subject with Case Number
+                    getCustomerServiceQueueRecord(formContext);
+                }
+            }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('Error in SetEmailFromIfRegardingisCase: ' + (error.description || error.message));
+    }
+}
+
+//Author: Surbhi Garg
+// US:20773
+// Calling this function on load of Task activity to show hide activity for
+
+function ShowHideActivityForOnTask(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        var globalContext = Xrm.Utility.getGlobalContext();
+        globalContext.getCurrentAppName().then(function successCallback(appName) {
+            if (appName === "Customer Service Hub") {
+
+                formContext.getControl("kofc_activityfor").setVisible(false);
+            }
+            else {
+                formContext.getControl("kofc_activityforservice").setVisible(false);
+            }
+        },
+            function errorCallback(error) {
+                Xrm.Navigation.openAlertDialog('Get Current App Name Error: ' + (error.description || error.message));
+            }
+        );
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('Error in ShowHideActivityForOnTask: ' + (error.description || error.message));
+    }
+}
+
+
+
+function setLocationOnChangeOfAppointment(executionContext) {
+    var formContext = executionContext.getFormContext();
+    if (formContext !== "undefined" && formContext !== null) {
+        // Get the regarding entity reference of the appointment
+        var location = formContext.getAttribute("location").getValue();
+        var regarding = formContext.getAttribute("regardingobjectid").getValue();
+        if (regarding && regarding[0].entityType === "contact") {
+            var regardingID = regarding[0].id.replace('{', '').replace('}', '');
+            // Get the contact record
+            Xrm.WebApi.retrieveRecord("contact", regardingID, "?$select=address1_line1,address1_line2,address1_line3,address1_city,kofc_address_stateorprovince,address1_postalcode")
+                .then(function (result) {
+                    // Construct the address string
+                    var address = [];
+                    if (result.address1_line1) address.push(result.address1_line1);
+                    if (result.address1_line2) address.push(result.address1_line2);
+                    if (result.address1_line3) address.push(result.address1_line3);
+                    if (result.address1_city) address.push(result.address1_city);
+                    if (result.kofc_address_stateorprovince) address.push(result["kofc_address_stateorprovince@OData.Community.Display.V1.FormattedValue"]);
+                    if (result.address1_postalcode) address.push(result.address1_postalcode);
+
+                    var formattedAddress = address.join(", ");
+
+                    // Set the Location field of the appointment
+                    formContext.getAttribute("location").setValue(formattedAddress);
+                })
+                .catch(function (error) {
+                    // Handle any errors that occur during the retrieval
+                    alert("Error retrieving contact address: " + error.message);
+                });
+        }
+        else { formContext.getAttribute("location").setValue(null); }
+
+    }
+}
+function setLocationOnLoadOfAppointment(executionContext) {
+    var formContext = executionContext.getFormContext();
+    if (formContext !== "undefined" && formContext !== null) {
+        // Get the regarding entity reference of the appointment
+        var location = formContext.getAttribute("location").getValue();
+        var regarding = formContext.getAttribute("regardingobjectid").getValue();
+        if (regarding && regarding[0].entityType === "contact") {
+            var regardingID = regarding[0].id.replace('{', '').replace('}', '');
+            if (location !== "undefined" && location !== null) { return; }
+            // Get the contact record
+            Xrm.WebApi.retrieveRecord("contact", regardingID, "?$select=address1_line1,address1_line2,address1_line3,address1_city,kofc_address_stateorprovince,address1_postalcode")
+                .then(function (result) {
+                    // Construct the address string
+                    var address = [];
+                    if (result.address1_line1) address.push(result.address1_line1);
+                    if (result.address1_line2) address.push(result.address1_line2);
+                    if (result.address1_line3) address.push(result.address1_line3);
+                    if (result.address1_city) address.push(result.address1_city);
+                    if (result.kofc_address_stateorprovince) address.push(result["kofc_address_stateorprovince@OData.Community.Display.V1.FormattedValue"]);
+                    if (result.address1_postalcode) address.push(result.address1_postalcode);
+
+                    var formattedAddress = address.join(", ");
+
+                    // Set the Location field of the appointment
+                    formContext.getAttribute("location").setValue(formattedAddress);
+                })
+                .catch(function (error) {
+                    // Handle any errors that occur during the retrieval
+                    alert("Error retrieving contact address: " + error.message);
+                });
+        }
+        else { formContext.getAttribute("location").setValue(null); }
+
+    }
+}
+
+function setActivityForOnPageLoadForRoles(executionContext) {
+    var formContext = executionContext.getFormContext();
+    if (formContext !== "undefined" && formContext !== null) {
+
+        var userRoles = Xrm.Utility.getGlobalContext().userSettings.roles;
+        var formType = formContext.ui.getFormType();
+        if (userRoles !== null && userRoles !== undefined && formType == 1) {
+            userRoles.forEach(function (item) {
+                if (item.name.toLowerCase() === "insurance leader" || item.name.toLowerCase() === "insurance sales" || item.name.toLowerCase() === "agency support") {
+                    formContext.getControl('kofc_activityfor').getAttribute().setValue(activityFor.Insurance);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "fraternal manager") {
+                    formContext.getControl('kofc_activityfor').getAttribute().setValue(activityFor.Fraternal);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "charity leader" || item.name.toLowerCase() === "charity user") {
+                    formContext.getControl('kofc_activityfor').getAttribute().setValue(activityFor.Charity);
+                    return;
+                }//changed 2.0
+                else if (item.name.toLowerCase() === "investment manager" || item.name.toLowerCase() === "investment support" || item.name.toLowerCase() == "investment leaderâ€‹â€‹") {
+                    formContext.getControl('kofc_activityfor').getAttribute().setValue(activityFor.InstitutionalInvestment);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "retail investment sales") {
+                    formContext.getControl('kofc_activityfor').getAttribute().setValue(activityFor.RetailInvestment);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "kccf leader" || item.name.toLowerCase() === "kccf user") {
+                    formContext.getControl('kofc_activityfor').getAttribute().setValue(activityFor.KCCF);
+                    return;
+                }
+                if (formContext.getControl('kofc_activityfor') !== null) {
+                    formContext.getControl('kofc_activitytypevalue').addPreSearch(AddActivityType);
+                }
+            });
+        }
+    }
+}
+
+function onLoadPhoneCallQuickCreate(executionContext) {
+
+    var formContext = executionContext.getFormContext();
+    if (formContext !== "undefined" && formContext !== null) {
+
+        let regardingObjectId = formContext.getAttribute("regardingobjectid").getValue();
+
+        if (regardingObjectId && regardingObjectId[0] && regardingObjectId[0].id && regardingObjectId[0].entityType == "contact") {
+            let contactId = regardingObjectId[0].id;
+
+            // 2. Retrieve Contact Data (including preferred contact method and phone numbers)
+            Xrm.WebApi.retrieveRecord("contact", contactId, "?$select=kofc_preferredphone,telephone1,telephone2,mobilephone").then(
+                function success(result) {
+                    const preferredContactMethod = result.kofc_preferredphone; // Option set value
+                    const businessPhone = result.telephone1;
+                    const homePhone = result.telephone2;
+                    const mobilePhone = result.mobilephone;
+                    let phoneNumberToUse = null;
+
+                    const preferredMethodMobile = 2; // value. 258510002
+                    const preferredMethodHomePhone = 1; // value. 258510001
+                    const preferredMethodBusinessPhone = 0; // value. 258510000
+
+                    if (preferredContactMethod === preferredMethodBusinessPhone) {
+                        phoneNumberToUse = businessPhone;
+                    } else if (preferredContactMethod === preferredMethodHomePhone) {
+                        phoneNumberToUse = homePhone;
+                    } else {
+                        phoneNumberToUse = mobilePhone;
+                    }
+                    if (phoneNumberToUse) {
+                        // Set the Phone Number on the Phone Call form.
+                        formContext.getAttribute("phonenumber").setValue(phoneNumberToUse);
+                    } else {
+                        console.log("No phone number available for the contact.");
+                    }
+                },
+                function (error) {
+                    console.error("Error retrieving contact:", error.message);
+                }
+            );
+        } else {
+            console.log("Regarding (Contact) is not set on the Phone Call Quick Create form.");
+        }
+
+    }
+}
+
+
+function getCustomerServiceQueueRecord(formContext) {
+    try {
+        const fetchXml = `<fetch version="1.0" output-format="xml-platform" mapping="logical" distinct="false">
+                      <entity name="queue">
+                        <attribute name="name" />
+                        <attribute name="emailaddress" />
+                        <attribute name="queueid" />
+                        <order attribute="name" descending="false" />
+                        <filter type="and">
+                          <condition attribute="name" operator="eq" value="Customer Service Queue" />
+                          <condition attribute="emailaddress" operator="like" value="customer.service%" />
+                          <condition attribute="statecode" operator="eq" value="0" />
+                        </filter>
+                      </entity>
+                    </fetch>`;
+
+        return Xrm.WebApi.retrieveMultipleRecords('queue', "?fetchXml=" + encodeURIComponent(fetchXml))
+            .then(function (result) {
+                if (result.entities.length === 0) {
+                    return;
+                }
+
+                var record = result.entities[0];
+                var fromEmail = new Array();
+                fromEmail[0] = new Object();
+                fromEmail[0].id = record["queueid"]; // GUID of the lookup id
+                fromEmail[0].name = customerServiceQueue.EntityName; // Name of the lookup
+                fromEmail[0].entityType = customerServiceQueue.EntityType; //Entity Type of the lookup entity
+                if (formContext.getAttribute("from").getValue() != null) {
+                    formContext.getAttribute("from").setValue(null);
+                    formContext.getAttribute("from").setValue(fromEmail);
+                }
+
+            })
+    } catch (error) {
+        console.log("Error while getting Customer Service Queue");
+    }
+}
+
+function restrictOptionalAttendees(executionContext) {
+    var formContext = executionContext.getFormContext();
+    var control = formContext.getControl("optionalattendees");
+    if (control) {
+        control.setEntityTypes(["systemuser", "contact"]);
+    }
+}
