@@ -7,7 +7,7 @@ KOFC.Task.filterActivityFor = function (executionContext) {
     try {
         var formContext = executionContext.getFormContext();
 
-        // Run only on Task
+        // Only execute on Task
         if (formContext.data.entity.getEntityName() !== "task") {
             return;
         }
@@ -21,8 +21,11 @@ KOFC.Task.filterActivityFor = function (executionContext) {
             return;
         }
 
-        // Only these options should be visible on Task
-        var allowedOptions = [
+        /*
+         * Task Activity For options
+         * Explicit alphabetical order
+         */
+        var taskOptions = [
             { text: "Annuity",    value: 258510007 },
             { text: "Fraternal",  value: 258510001 },
             { text: "Insurance",  value: 258510000 },
@@ -31,24 +34,39 @@ KOFC.Task.filterActivityFor = function (executionContext) {
             { text: "Taxation",   value: 258510010 }
         ];
 
-        // Explicitly sort alphabetically by label
-        allowedOptions.sort(function (a, b) {
-            return a.text.localeCompare(b.text);
-        });
-
-        // Remove all existing options
-        control.clearOptions();
-
-        // Add the allowed options back in alphabetical order
-        allowedOptions.forEach(function (option, index) {
-            control.addOption(
-                {
-                    text: option.text,
-                    value: option.value
-                },
-                index
+        // Sort again as an extra safeguard
+        taskOptions.sort(function (a, b) {
+            return a.text.localeCompare(
+                b.text,
+                undefined,
+                { sensitivity: "base" }
             );
         });
+
+        // Remove every existing choice from the UI control
+        control.clearOptions();
+
+        /*
+         * IMPORTANT:
+         * Do NOT specify an index.
+         *
+         * Dynamics appends each option to the end,
+         * preserving the exact sequence below.
+         */
+        taskOptions.forEach(function (option) {
+            control.addOption({
+                text: option.text,
+                value: option.value
+            });
+        });
+
+        // Debug verification
+        console.log(
+            "KOFC Task Activity For options:",
+            control.getOptions().map(function (o) {
+                return o.text;
+            })
+        );
 
     } catch (error) {
         console.error(
