@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stage Gate Guidance</title>
+<style>
+    :root{
+        --sg-purple:#742774;
+        --sg-purple-700:#5a1d5a;
+        --sg-purple-100:#f6eef8;
+        --sg-purple-050:#fbf8fc;
+        --sg-text:#242424;
+        --sg-muted:#605e5c;
+        --sg-border:#e8e3e9;
+        --sg-success:#107c10;
+        --sg-success-bg:#f1faf1;
+        --sg-warning:#8a4b00;
+        --sg-warning-bg:#fff7e6;
+        --sg-surface:#ffffff;
+        --sg-shadow:0 2px 10px rgba(0,0,0,.06);
+        --sg-radius:12px;
+    }
+
+    *{box-sizing:border-box}
+
+    html, body{
+        margin:0;
+        padding:0;
+        background:transparent;
+        font-family:"Segoe UI", SegoeUI, Arial, sans-serif;
+        color:var(--sg-text);
+    }
+
+    body{
+        padding:6px;
+    }
+
+    .sg-banner{
+        width:100%;
+        background:var(--sg-surface);
+        border:1px solid var(--sg-border);
+        border-left:5px solid var(--sg-purple);
+        border-radius:var(--sg-radius);
+        box-shadow:var(--sg-shadow);
+        overflow:hidden;
+    }
+
+    .sg-header{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:16px;
+        padding:16px 18px 13px;
+        background:
+            linear-gradient(90deg, var(--sg-purple-050) 0%, #ffffff 72%);
+    }
+
+    .sg-title-wrap{
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+        min-width:0;
+    }
+
+    .sg-icon{
+        width:34px;
+        height:34px;
+        border-radius:50%;
+        background:var(--sg-purple-100);
+        color:var(--sg-purple);
+        display:grid;
+        place-items:center;
+        flex:0 0 auto;
+        margin-top:1px;
+    }
+
+    .sg-icon svg{
+        width:18px;
+        height:18px;
+        display:block;
+    }
+
+    .sg-kicker{
+        margin:0 0 2px;
+        color:var(--sg-purple-700);
+        font-size:11px;
+        line-height:1.3;
+        font-weight:700;
+        letter-spacing:.45px;
+        text-transform:uppercase;
+    }
+
+    .sg-title{
+        margin:0;
+        font-size:17px;
+        line-height:1.35;
+        font-weight:600;
+        color:var(--sg-text);
+    }
+
+    .sg-title strong{
+        color:var(--sg-purple-700);
+        font-weight:700;
+    }
+
+    .sg-subtitle{
+        margin:5px 0 0;
+        color:var(--sg-muted);
+        font-size:12.5px;
+        line-height:1.45;
+    }
+
+    .sg-stage-chip{
+        display:inline-flex;
+        align-items:center;
+        gap:7px;
+        border:1px solid #e0d3e3;
+        background:#fff;
+        color:var(--sg-purple-700);
+        border-radius:999px;
+        padding:7px 10px;
+        font-size:11.5px;
+        font-weight:600;
+        white-space:nowrap;
+        flex:0 0 auto;
+    }
+
+    .sg-stage-dot{
+        width:7px;
+        height:7px;
+        border-radius:50%;
+        background:var(--sg-purple);
+    }
+
+    .sg-divider{
+        height:1px;
+        background:var(--sg-border);
+        margin:0 18px;
+    }
+
+    .sg-body{
+        padding:13px 18px 16px;
+    }
+
+    .sg-summary{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin-bottom:12px;
+    }
+
+    .sg-progress{
+        height:7px;
+        flex:1;
+        background:#f0edf1;
+        border-radius:999px;
+        overflow:hidden;
+    }
+
+    .sg-progress-fill{
+        height:100%;
+        width:0%;
+        background:linear-gradient(90deg, var(--sg-purple), #9a4fa0);
+        border-radius:999px;
+        transition:width .2s ease;
+    }
+
+    .sg-progress-text{
+        font-size:11.5px;
+        font-weight:600;
+        color:var(--sg-muted);
+        white-space:nowrap;
+    }
+
+    .sg-groups{
+        display:grid;
+        grid-template-columns:repeat(3, minmax(0, 1fr));
+        gap:10px;
+    }
+
+    .sg-group{
+        border:1px solid var(--sg-border);
+        border-radius:10px;
+        padding:10px 11px;
+        background:#fff;
+        min-width:0;
+    }
+
+    .sg-group-title{
+        display:flex;
+        align-items:center;
+        gap:7px;
+        margin:0 0 7px;
+        font-size:11px;
+        line-height:1.3;
+        font-weight:700;
+        color:var(--sg-muted);
+        text-transform:uppercase;
+        letter-spacing:.3px;
+    }
+
+    .sg-group-title svg{
+        width:14px;
+        height:14px;
+        color:var(--sg-purple);
+        flex:0 0 auto;
+    }
+
+    .sg-list{
+        list-style:none;
+        padding:0;
+        margin:0;
+        display:grid;
+        gap:6px;
+    }
+
+    .sg-item{
+        display:flex;
+        align-items:flex-start;
+        gap:7px;
+        min-width:0;
+        font-size:12.5px;
+        line-height:1.35;
+    }
+
+    .sg-item-icon{
+        width:17px;
+        height:17px;
+        flex:0 0 17px;
+        margin-top:.5px;
+        display:grid;
+        place-items:center;
+        border-radius:50%;
+    }
+
+    .sg-item.complete .sg-item-icon{
+        background:var(--sg-success-bg);
+        color:var(--sg-success);
+    }
+
+    .sg-item.missing .sg-item-icon{
+        background:var(--sg-warning-bg);
+        color:var(--sg-warning);
+        border:1px solid #f2d39d;
+    }
+
+    .sg-item.complete .sg-item-label{
+        color:#4b4b4b;
+    }
+
+    .sg-item.missing .sg-item-label{
+        color:var(--sg-text);
+        font-weight:600;
+    }
+
+    .sg-empty{
+        padding:11px 12px;
+        border-radius:9px;
+        background:var(--sg-success-bg);
+        border:1px solid #cde8cd;
+        color:#0b5f0b;
+        font-size:12.5px;
+        font-weight:600;
+        display:flex;
+        align-items:center;
+        gap:9px;
+    }
+
+    .sg-footer{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        padding:10px 18px;
+        background:#fafafa;
+        border-top:1px solid var(--sg-border);
+        color:var(--sg-muted);
+        font-size:11.5px;
+    }
+
+    .sg-footer strong{
+        color:var(--sg-text);
+    }
+
+    .sg-status{
+        display:flex;
+        align-items:center;
+        gap:7px;
+    }
+
+    .sg-status-dot{
+        width:7px;
+        height:7px;
+        border-radius:50%;
+        background:#d98324;
+    }
+
+    .sg-status.ready .sg-status-dot{
+        background:var(--sg-success);
+    }
+
+    .sg-hidden{
+        display:none !important;
+    }
+
+    @media(max-width:980px){
+        .sg-groups{
+            grid-template-columns:1fr 1fr;
+        }
+    }
+
+    @media(max-width:650px){
+        body{padding:4px}
+        .sg-header{
+            flex-direction:column;
+            padding:14px;
+        }
+        .sg-stage-chip{align-self:flex-start}
+        .sg-divider{margin:0 14px}
+        .sg-body{padding:12px 14px 14px}
+        .sg-groups{grid-template-columns:1fr}
+        .sg-footer{
+            padding:10px 14px;
+            align-items:flex-start;
+            flex-direction:column;
+        }
+    }
+</style>
+</head>
+<body>
+
+<section id="stageGateBanner" class="sg-banner" aria-live="polite">
+    <header class="sg-header">
+        <div class="sg-title-wrap">
+            <div class="sg-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+                    <path d="M12 10.5v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    <circle cx="12" cy="7.2" r="1" fill="currentColor"/>
+                </svg>
+            </div>
+
+            <div>
+                <p class="sg-kicker">Stage Gate Guidance</p>
+                <h2 id="sgTitle" class="sg-title">
+                    Complete the remaining items to move to <strong>Solution Design &amp; Pricing</strong>
+                </h2>
+                <p id="sgSubtitle" class="sg-subtitle">
+                    Only outstanding requirements are highlighted below.
+                </p>
+            </div>
+        </div>
+
+        <div class="sg-stage-chip">
+            <span class="sg-stage-dot"></span>
+            <span id="sgStageChip">Discovery</span>
+        </div>
+    </header>
+
+    <div class="sg-divider"></div>
+
+    <div class="sg-body">
+        <div id="sgProgressRow" class="sg-summary">
+            <div class="sg-progress" aria-hidden="true">
+                <div id="sgProgressFill" class="sg-progress-fill"></div>
+            </div>
+            <div id="sgProgressText" class="sg-progress-text">0 of 0 complete</div>
+        </div>
+
+        <div id="sgGroups" class="sg-groups"></div>
+        <div id="sgEmpty" class="sg-empty sg-hidden">
+            <span aria-hidden="true">✓</span>
+            <span>All requirements for this stage are complete. The opportunity is ready to advance.</span>
+        </div>
+    </div>
+
+    <footer class="sg-footer">
+        <div id="sgStatus" class="sg-status">
+            <span class="sg-status-dot"></span>
+            <span><strong>Stage requirements outstanding</strong></span>
+        </div>
+        <div id="sgFooterText">Save the Opportunity after completing the remaining items.</div>
+    </footer>
+</section>
+
+<script>
+(function () {
+    "use strict";
+
+    const GROUP_META = {
+        "Summary": {
+            icon:
+                '<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M8 9h8M8 13h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
+        },
+        "Strategy & Qualification": {
+            icon:
+                '<svg viewBox="0 0 24 24" fill="none"><path d="M5 18V9m7 9V5m7 13v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+        },
+        "Milestones": {
+            icon:
+                '<svg viewBox="0 0 24 24" fill="none"><path d="M6 3v18M7 5h10l-2.5 3L17 11H7" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>'
+        },
+        "Related Records": {
+            icon:
+                '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.7"/><circle cx="16" cy="16" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.2 10.2l3.6 3.6" stroke="currentColor" stroke-width="1.7"/></svg>'
+        }
+    };
+
+    let currentData = {
+        stage: "Discovery",
+        nextStage: "Solution Design & Pricing",
+        opportunityType: "Strategic",
+        requirements: [
+            { label: "Customer Pain and Objective", group: "Summary", complete: true },
+            { label: "Product Summary", group: "Summary", complete: true },
+            { label: "Expected Gross Revenue", group: "Summary", complete: false },
+            { label: "Expected Volume", group: "Summary", complete: true },
+            { label: "Win Confidence", group: "Strategy & Qualification", complete: false },
+            { label: "C-Code", group: "Related Records", complete: true },
+            { label: "Proposal Submission Target Date", group: "Milestones", complete: false }
+        ]
+    };
+
+    function escapeHtml(value) {
+        return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function normalizeRequirement(item) {
+        return {
+            label: item && item.label ? String(item.label) : "Requirement",
+            group: item && item.group ? String(item.group) : "Summary",
+            complete: !!(item && item.complete)
+        };
+    }
+
+    function renderRequirement(item) {
+        const state = item.complete ? "complete" : "missing";
+        const icon = item.complete ? "✓" : "!";
+        return (
+            '<li class="sg-item ' + state + '">' +
+                '<span class="sg-item-icon" aria-hidden="true">' + icon + '</span>' +
+                '<span class="sg-item-label">' + escapeHtml(item.label) + '</span>' +
+            '</li>'
+        );
+    }
+
+    function renderGroup(groupName, items) {
+        const meta = GROUP_META[groupName] || GROUP_META["Summary"];
+        return (
+            '<section class="sg-group">' +
+                '<h3 class="sg-group-title">' +
+                    meta.icon +
+                    '<span>' + escapeHtml(groupName) + '</span>' +
+                '</h3>' +
+                '<ul class="sg-list">' +
+                    items.map(renderRequirement).join("") +
+                '</ul>' +
+            '</section>'
+        );
+    }
+
+    function render() {
+        const data = currentData || {};
+        const requirements = Array.isArray(data.requirements)
+            ? data.requirements.map(normalizeRequirement)
+            : [];
+
+        const stage = data.stage || "Current Stage";
+        const nextStage = data.nextStage || "the next stage";
+        const opportunityType = data.opportunityType || "";
+
+        document.getElementById("sgTitle").innerHTML =
+            'Complete the remaining items to move to <strong>' +
+            escapeHtml(nextStage) +
+            '</strong>';
+
+        document.getElementById("sgSubtitle").textContent =
+            opportunityType
+                ? opportunityType + " opportunity • Only outstanding requirements are highlighted below."
+                : "Only outstanding requirements are highlighted below.";
+
+        document.getElementById("sgStageChip").textContent = stage;
+
+        const completeCount = requirements.filter(r => r.complete).length;
+        const missingCount = requirements.length - completeCount;
+        const percent = requirements.length
+            ? Math.round((completeCount / requirements.length) * 100)
+            : 100;
+
+        document.getElementById("sgProgressFill").style.width = percent + "%";
+        document.getElementById("sgProgressText").textContent =
+            completeCount + " of " + requirements.length + " complete";
+
+        const groups = {};
+        requirements.forEach(function (item) {
+            if (!groups[item.group]) groups[item.group] = [];
+            groups[item.group].push(item);
+        });
+
+        const groupNames = Object.keys(groups);
+        const groupsEl = document.getElementById("sgGroups");
+        groupsEl.innerHTML = groupNames.map(function (name) {
+            return renderGroup(name, groups[name]);
+        }).join("");
+
+        const emptyEl = document.getElementById("sgEmpty");
+        const progressRow = document.getElementById("sgProgressRow");
+        const statusEl = document.getElementById("sgStatus");
+        const footerText = document.getElementById("sgFooterText");
+
+        if (requirements.length === 0 || missingCount === 0) {
+            emptyEl.classList.remove("sg-hidden");
+            groupsEl.classList.add("sg-hidden");
+            progressRow.classList.add("sg-hidden");
+            statusEl.classList.add("ready");
+            statusEl.innerHTML =
+                '<span class="sg-status-dot"></span>' +
+                '<span><strong>Stage requirements complete</strong></span>';
+            footerText.textContent =
+                "The stage controller can advance when the BPF is ready.";
+        } else {
+            emptyEl.classList.add("sg-hidden");
+            groupsEl.classList.remove("sg-hidden");
+            progressRow.classList.remove("sg-hidden");
+            statusEl.classList.remove("ready");
+            statusEl.innerHTML =
+                '<span class="sg-status-dot"></span>' +
+                '<span><strong>' + missingCount +
+                (missingCount === 1 ? " requirement outstanding" : " requirements outstanding") +
+                '</strong></span>';
+            footerText.textContent =
+                "Save the Opportunity after completing the remaining items.";
+        }
+    }
+
+    const api = {
+        setData: function (data) {
+            currentData = data || {};
+            render();
+        },
+
+        setVisible: function (visible) {
+            document.getElementById("stageGateBanner")
+                .classList.toggle("sg-hidden", visible === false);
+        },
+
+        refresh: render
+    };
+
+    window.StageGateBanner = api;
+
+    // Optional parent-window integration using postMessage.
+    window.addEventListener("message", function (event) {
+        const message = event && event.data;
+        if (!message || message.type !== "CHR_STAGE_GATE_BANNER") return;
+
+        if (message.action === "setData") {
+            api.setData(message.data);
+        } else if (message.action === "setVisible") {
+            api.setVisible(message.visible);
+        }
+    });
+
+    render();
+})();
+</script>
+</body>
+</html>
