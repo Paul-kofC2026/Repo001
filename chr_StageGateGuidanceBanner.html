@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Opportunity Stage Gate Guidance</title>
+<style>
+:root {
+    --navy: #153A5B;
+    --navy-dark: #0E2B45;
+    --navy-soft: #F2F6FA;
+    --text: #242424;
+    --muted: #666666;
+    --border: #D5DBE1;
+    --border-soft: #D9E2EA;
+    --green: #107C10;
+    --green-soft: #F1F8F1;
+    --amber: #D88322;
+    --focus: #0F6CBD;
+}
+
+* { box-sizing: border-box; }
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    background: transparent;
+    font-family: "Segoe UI", SegoeUI, Arial, sans-serif;
+    color: var(--text);
+}
+
+body { overflow: hidden; }
+
+.sg-banner {
+    width: 100%;
+    height: 108px;
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.sg-top {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    background: var(--navy-soft);
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.sg-info {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex: 0 0 18px;
+    background: var(--navy);
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.sg-label {
+    flex: 0 0 auto;
+    color: var(--navy);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+}
+
+.sg-stage {
+    flex: 0 0 auto;
+    color: var(--navy-dark);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.sg-arrow {
+    flex: 0 0 auto;
+    color: #888888;
+}
+
+.sg-next {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.sg-remaining {
+    flex: 0 0 auto;
+    color: var(--navy);
+    background: #FFFFFF;
+    border: 1px solid #CBD9E6;
+    padding: 3px 7px;
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+.sg-body {
+    min-height: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 7px 12px 6px;
+}
+
+.sg-prefix {
+    width: 104px;
+    flex: 0 0 104px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+}
+
+.sg-requirements {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    overflow: hidden;
+}
+
+.sg-requirement {
+    height: 28px;
+    max-width: 220px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border: 1px solid var(--border);
+    background: #FFFFFF;
+    color: var(--text);
+    font: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+button.sg-requirement {
+    cursor: pointer;
+}
+
+button.sg-requirement:hover,
+button.sg-requirement:focus-visible {
+    outline: none;
+    border-color: var(--navy);
+    background: #F7FAFD;
+    color: var(--navy);
+}
+
+.sg-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+    flex: 0 0 6px;
+}
+
+.sg-requirement-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sg-go {
+    flex: 0 0 auto;
+    color: #7D8FA0;
+    font-size: 12px;
+}
+
+.sg-more {
+    flex: 0 0 auto;
+    margin-left: 7px;
+    color: var(--navy);
+    font-size: 10.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.sg-ready {
+    min-width: 0;
+    flex: 1;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    background: var(--green-soft);
+    border: 1px solid #CFE7CF;
+    color: #0B5F0B;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.sg-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex: 0 0 16px;
+    background: var(--green);
+    color: #FFFFFF;
+    font-size: 10px;
+}
+
+.sg-loading {
+    min-width: 0;
+    flex: 1;
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+.sg-foot {
+    height: 22px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 5px;
+}
+
+.sg-track {
+    height: 3px;
+    flex: 1;
+    overflow: hidden;
+    background: #E6ECF1;
+}
+
+.sg-fill {
+    width: 0;
+    height: 100%;
+    background: var(--navy);
+    transition: width .18s ease;
+}
+
+.sg-progress-text {
+    min-width: 90px;
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 10px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.sg-hidden { display: none !important; }
+
+@media (max-width: 900px) {
+    .sg-prefix { width: 86px; flex-basis: 86px; }
+    .sg-requirement { max-width: 170px; }
+}
+</style>
+</head>
+<body>
+<section id="stageGateBanner" class="sg-banner" aria-live="polite">
+    <div class="sg-top">
+        <div class="sg-info" aria-hidden="true">i</div>
+        <div class="sg-label">Stage Gate</div>
+        <div id="sgStage" class="sg-stage">Stage</div>
+        <div class="sg-arrow">›</div>
+        <div id="sgNext" class="sg-next">Checking stage requirements…</div>
+        <div id="sgRemaining" class="sg-remaining">Checking</div>
+    </div>
+
+    <div class="sg-body">
+        <div class="sg-prefix">Required<br />to advance</div>
+        <div id="sgRequirements" class="sg-requirements"></div>
+        <div id="sgMore" class="sg-more sg-hidden"></div>
+        <div id="sgReady" class="sg-ready sg-hidden">
+            <span class="sg-check">✓</span>
+            <span>All stage requirements are complete. Ready to advance.</span>
+        </div>
+        <div id="sgLoading" class="sg-loading">Checking current stage requirements…</div>
+    </div>
+
+    <div class="sg-foot">
+        <div class="sg-track"><div id="sgFill" class="sg-fill"></div></div>
+        <div id="sgProgressText" class="sg-progress-text">Checking…</div>
+    </div>
+</section>
+
+<script>
+(function () {
+    "use strict";
+
+    let currentData = {
+        loading: true,
+        stage: "Stage",
+        nextStage: "the next stage",
+        opportunityType: "",
+        requirements: []
+    };
+
+    function escapeHtml(value) {
+        return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function navigate(requirementKey) {
+        if (!requirementKey) {
+            return;
+        }
+
+        try {
+            if (
+                window.parent &&
+                window.parent.CHR &&
+                window.parent.CHR.OpportunityBpfStageGate &&
+                typeof window.parent.CHR.OpportunityBpfStageGate.navigateToGuidanceRequirement === "function"
+            ) {
+                window.parent.CHR.OpportunityBpfStageGate.navigateToGuidanceRequirement(requirementKey);
+                return;
+            }
+        } catch (directError) {
+            // Use postMessage when the form shell isolates the web resource frame.
+        }
+
+        if (window.parent && typeof window.parent.postMessage === "function") {
+            window.parent.postMessage(
+                {
+                    type: "CHR_STAGE_GATE_GUIDANCE",
+                    action: "navigate",
+                    requirementKey: requirementKey
+                },
+                "*"
+            );
+        }
+    }
+
+    function renderRequirement(item) {
+        const navigable = item && item.navigable === true;
+        const tag = navigable ? "button" : "div";
+        const title = navigable
+            ? ' title="Click to navigate to ' + escapeHtml(item.label) + '"'
+            : "";
+        const type = navigable ? ' type="button"' : "";
+        const key = navigable
+            ? ' data-requirement-key="' + escapeHtml(item.key) + '"'
+            : "";
+        const arrow = navigable ? '<span class="sg-go">›</span>' : "";
+
+        return (
+            "<" + tag + type + key + title + ' class="sg-requirement">' +
+                '<span class="sg-dot"></span>' +
+                '<span class="sg-requirement-label">' + escapeHtml(item.label) + "</span>" +
+                arrow +
+            "</" + tag + ">"
+        );
+    }
+
+    function wireNavigation() {
+        document.querySelectorAll("button.sg-requirement[data-requirement-key]")
+            .forEach(function (button) {
+                button.addEventListener("click", function () {
+                    navigate(button.getAttribute("data-requirement-key"));
+                });
+            });
+    }
+
+    function render() {
+        const data = currentData || {};
+        const requirements = Array.isArray(data.requirements) ? data.requirements : [];
+        const missing = requirements.filter(function (item) {
+            return item && item.complete !== true;
+        });
+        const completedCount = requirements.length - missing.length;
+        const percent = requirements.length > 0
+            ? Math.round((completedCount / requirements.length) * 100)
+            : 100;
+
+        document.getElementById("sgStage").textContent = data.stage || "Current Stage";
+
+        const requirementsHost = document.getElementById("sgRequirements");
+        const moreHost = document.getElementById("sgMore");
+        const readyHost = document.getElementById("sgReady");
+        const loadingHost = document.getElementById("sgLoading");
+        const remainingHost = document.getElementById("sgRemaining");
+        const progressTextHost = document.getElementById("sgProgressText");
+        const fillHost = document.getElementById("sgFill");
+
+        if (data.loading === true) {
+            document.getElementById("sgNext").textContent = "Checking current stage requirements…";
+            remainingHost.textContent = "Checking";
+            requirementsHost.classList.add("sg-hidden");
+            moreHost.classList.add("sg-hidden");
+            readyHost.classList.add("sg-hidden");
+            loadingHost.classList.remove("sg-hidden");
+            fillHost.style.width = "0%";
+            progressTextHost.textContent = "Checking…";
+            return;
+        }
+
+        loadingHost.classList.add("sg-hidden");
+        document.getElementById("sgNext").textContent = missing.length > 0
+            ? "Complete remaining items to move to " + (data.nextStage || "the next stage")
+            : "All requirements complete";
+
+        remainingHost.textContent = missing.length === 1
+            ? "1 remaining"
+            : missing.length + " remaining";
+
+        fillHost.style.width = percent + "%";
+        progressTextHost.textContent = completedCount + " of " + requirements.length + " complete";
+
+        if (missing.length === 0) {
+            requirementsHost.classList.add("sg-hidden");
+            moreHost.classList.add("sg-hidden");
+            readyHost.classList.remove("sg-hidden");
+            return;
+        }
+
+        readyHost.classList.add("sg-hidden");
+        requirementsHost.classList.remove("sg-hidden");
+
+        const maxVisible = 5;
+        requirementsHost.innerHTML = missing
+            .slice(0, maxVisible)
+            .map(renderRequirement)
+            .join("");
+        wireNavigation();
+
+        if (missing.length > maxVisible) {
+            moreHost.textContent = "+" + (missing.length - maxVisible) + " more";
+            moreHost.classList.remove("sg-hidden");
+        } else {
+            moreHost.classList.add("sg-hidden");
+        }
+    }
+
+    const api = {
+        setData: function (data) {
+            currentData = data || {};
+            render();
+        },
+
+        setVisible: function (visible) {
+            document.getElementById("stageGateBanner")
+                .classList.toggle("sg-hidden", visible === false);
+        },
+
+        refresh: render
+    };
+
+    window.StageGateBanner = api;
+
+    window.addEventListener("message", function (event) {
+        const message = event && event.data;
+        if (!message || message.type !== "CHR_STAGE_GATE_BANNER") {
+            return;
+        }
+
+        if (message.action === "setData") {
+            api.setData(message.data);
+        } else if (message.action === "setVisible") {
+            api.setVisible(message.visible);
+        }
+    });
+
+    render();
+})();
+</script>
+</body>
+</html>
