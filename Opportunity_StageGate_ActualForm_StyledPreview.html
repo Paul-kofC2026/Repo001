@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stage Gate Guidance - Actual Form Styled Preview</title>
+<style>
+:root{
+  --navy:#153A5B;
+  --navy-dark:#0E2B45;
+  --navy-soft:#F2F6FA;
+  --text:#242424;
+  --muted:#666;
+  --border:#D9DEE3;
+  --green:#107C10;
+  --green-soft:#F1F8F1;
+  --amber:#A15C00;
+  --amber-soft:#FFF7EA;
+  --purple:#742774;
+  --focus:#0F6CBD;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:"Segoe UI",SegoeUI,Arial,sans-serif;background:#f3f3f3;color:var(--text);scroll-behavior:smooth}
+.app{max-width:1460px;margin:0 auto;background:#fff;min-height:100vh}
+.top{height:48px;background:#1c1c1c;color:#fff;display:flex;align-items:center;padding:0 22px;font-size:14px}
+.command{height:42px;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:20px;padding:0 22px;font-size:12px}
+.header{padding:18px 24px 10px}
+.header h1{font-size:20px;margin:0 0 3px;font-weight:600}
+.header .sub{font-size:12px;color:#666}
+.bpf{padding:12px 22px 15px;border-top:1px solid #eee;border-bottom:1px solid #ddd}
+.bpfrow{display:flex}
+.stage{flex:1;border-top:3px solid #c8c6c4;position:relative;padding:7px 5px 0 18px;font-size:11px;color:#555;white-space:nowrap}
+.stage:before{content:"";position:absolute;left:0;top:-6px;width:9px;height:9px;border-radius:50%;background:#c8c6c4}
+.stage.active{border-color:#0F6CBD;color:#0F6CBD;font-weight:600}
+.stage.active:before{background:#0F6CBD}
+.tabs{height:42px;display:flex;align-items:end;padding:0 20px;border-bottom:1px solid #ddd}
+.tab{height:42px;padding:0 13px;display:flex;align-items:center;border-bottom:2px solid transparent;font-size:12px;cursor:pointer}
+.tab.active{font-weight:600;border-color:#0F6CBD}
+.content{display:grid;grid-template-columns:minmax(0,3fr) minmax(270px,1fr);gap:14px;padding:12px 20px 30px}
+.maincol,.sidecol{min-width:0}
+.panel{border:1px solid #ddd;background:#fff}
+.panel-title{font-size:12px;font-weight:600;padding:9px 12px;border-bottom:1px solid #e5e5e5}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px 22px;padding:14px}
+.field{transition:.2s}
+.field label{font-size:11px;display:block;margin-bottom:4px;color:#444}
+.fake{height:30px;background:#fafafa;border-bottom:1px solid #bdbdbd;padding:6px 8px;font-size:12px}
+.field.focused,.target.focused{outline:2px solid var(--focus);outline-offset:4px;background:#f4f9fe}
+
+/* Actual-form guidance banner */
+.guidance-shell{
+  border:1px solid #D5DBE1;
+  background:#fff;
+  margin-bottom:12px;
+  min-height:108px;
+}
+.guidance-top{
+  height:34px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 12px;
+  background:var(--navy-soft);
+  border-bottom:1px solid #D9E2EA;
+}
+.info-dot{
+  width:18px;height:18px;border-radius:50%;
+  background:var(--navy);color:#fff;display:grid;place-items:center;
+  font-size:11px;font-weight:700;flex:0 0 auto
+}
+.guide-label{font-size:10px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px}
+.guide-stage{font-size:12px;font-weight:700;color:var(--navy-dark)}
+.guide-arrow{color:#888}
+.guide-next{font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.remaining{
+  margin-left:auto;
+  font-size:10.5px;
+  font-weight:700;
+  color:var(--navy);
+  border:1px solid #CBD9E6;
+  background:#fff;
+  padding:3px 7px;
+}
+.guidance-body{
+  display:flex;
+  align-items:center;
+  min-height:52px;
+  padding:7px 12px 6px;
+}
+.guide-prefix{
+  width:104px;
+  flex:0 0 104px;
+  font-size:10px;
+  line-height:1.15;
+  font-weight:700;
+  color:#666;
+  text-transform:uppercase;
+}
+.req-row{
+  min-width:0;
+  flex:1;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  overflow:hidden;
+}
+.req{
+  height:28px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:0 9px;
+  border:1px solid #D5DBE1;
+  background:#fff;
+  font-size:11px;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:.15s;
+  max-width:210px;
+}
+.req:hover{
+  border-color:var(--navy);
+  background:#F7FAFD;
+  color:var(--navy);
+}
+.req .dot{width:6px;height:6px;border-radius:50%;background:#D88322;flex:0 0 6px}
+.req span:nth-child(2){overflow:hidden;text-overflow:ellipsis}
+.req .go{color:#7d8fa0;font-size:12px}
+.more{font-size:10.5px;color:var(--navy);font-weight:700;white-space:nowrap}
+.guidance-foot{
+  height:22px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 12px 5px;
+}
+.track{height:3px;background:#E6ECF1;flex:1;overflow:hidden}
+.fill{height:100%;background:var(--navy);width:0}
+.progress-text{font-size:10px;color:#666;min-width:90px;text-align:right}
+.ready{
+  flex:1;
+  height:30px;
+  display:flex;align-items:center;gap:7px;
+  background:var(--green-soft);border:1px solid #cfe7cf;
+  color:#0b5f0b;font-size:11.5px;font-weight:700;padding:0 10px
+}
+.check{width:16px;height:16px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:10px}
+.hidden{display:none!important}
+
+/* side card */
+.side-body{padding:12px}
+.date-row{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;margin-bottom:10px;font-size:11px}
+.date-box{height:28px;background:#f5f5f5;border:1px solid #ddd}
+.subgrid{margin-top:12px;border:1px solid #ddd}
+.subgrid-head{padding:8px 10px;border-bottom:1px solid #e5e5e5;font-size:11px;font-weight:600}
+.subgrid-body{padding:18px 10px;min-height:70px;font-size:11px;color:#666}
+.nav-toast{
+ position:fixed;right:18px;bottom:18px;background:#222;color:#fff;padding:9px 13px;
+ font-size:11px;opacity:0;transform:translateY(8px);transition:.2s
+}
+.nav-toast.show{opacity:1;transform:translateY(0)}
+.demo-controls{margin-top:14px;padding:10px;border:1px solid #ddd;background:#fafafa}
+.demo-controls h3{font-size:11px;margin:0 0 8px}
+.demo-buttons{display:flex;flex-wrap:wrap;gap:6px}
+.demo-buttons button{font-family:inherit;font-size:10.5px;padding:5px 8px;border:1px solid #bbb;background:#fff;cursor:pointer}
+.demo-buttons button.done{border-color:#9fd39f;background:#f1faf1;color:#0b5f0b}
+@media(max-width:980px){.content{grid-template-columns:1fr}.sidecol{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">Commercial • SANDBOX</div>
+  <div class="command">Save &nbsp;&nbsp; New &nbsp;&nbsp; Mark As Won &nbsp;&nbsp; Close as Lost &nbsp;&nbsp; Sequences &nbsp;&nbsp; Word Templates &nbsp;&nbsp; Check access &nbsp;&nbsp; Refresh</div>
+
+  <div class="header">
+    <h1>testing</h1>
+    <div class="sub">Opportunity • New Opportunity Form</div>
+  </div>
+
+  <div class="bpf">
+    <div class="bpfrow">
+      <div class="stage">Sales Process</div>
+      <div class="stage active">Discovery</div>
+      <div class="stage">Solution Design &amp; Pricing</div>
+      <div class="stage">Propose</div>
+      <div class="stage">Negotiate &amp; Commit</div>
+      <div class="stage">Implementation</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="summary">Summary</div>
+    <div class="tab" data-tab="strategy">Strategy &amp; Qualification</div>
+    <div class="tab" data-tab="documents">Documents</div>
+    <div class="tab" data-tab="milestones">Milestones</div>
+    <div class="tab" data-tab="products">Products &amp; Forecast</div>
+    <div class="tab">Solution</div>
+    <div class="tab">Notes</div>
+    <div class="tab">Related</div>
+  </div>
+
+  <div class="content">
+    <div class="maincol">
+
+      <div id="guidance" class="guidance-shell">
+        <div class="guidance-top">
+          <div class="info-dot">i</div>
+          <div class="guide-label">Stage Gate</div>
+          <div class="guide-stage">Discovery</div>
+          <div class="guide-arrow">›</div>
+          <div class="guide-next">Complete remaining items to move to Solution Design &amp; Pricing</div>
+          <div id="remaining" class="remaining"></div>
+        </div>
+        <div class="guidance-body">
+          <div class="guide-prefix">Required<br>to advance</div>
+          <div id="reqRow" class="req-row"></div>
+          <div id="ready" class="ready hidden"><span class="check">✓</span><span>All Discovery requirements are complete. Ready to advance.</span></div>
+          <div id="more" class="more hidden"></div>
+        </div>
+        <div class="guidance-foot">
+          <div class="track"><div id="fill" class="fill"></div></div>
+          <div id="progressText" class="progress-text"></div>
+        </div>
+      </div>
+
+      <div id="summary" class="panel tabPage">
+        <div class="panel-title">Deal Snapshot</div>
+        <div class="fields">
+          <div class="field target" id="topic"><label>Topic</label><div class="fake">testing</div></div>
+          <div class="field target" id="productSummary"><label>Product Summary</label><div class="fake">Managed transportation solution</div></div>
+          <div class="field target" id="opportunityId"><label>Opportunity ID</label><div class="fake">0003091</div></div>
+          <div class="field target" id="horizontalSummary"><label>Horizontal Summary</label><div class="fake"></div></div>
+          <div class="field target" id="account"><label>Account</label><div class="fake">BMW of North America, LLC</div></div>
+          <div class="field target" id="expectedNetRevenue"><label>Expected Net Revenue</label><div class="fake">$0.00</div></div>
+          <div class="field target" id="accountVertical"><label>Account Vertical</label><div class="fake"></div></div>
+          <div class="field target" id="expectedGrossRevenue"><label>Expected Gross Revenue</label><div class="fake">$0.00</div></div>
+          <div class="field target" id="statusReason"><label>Status Reason</label><div class="fake">Active Account</div></div>
+          <div class="field target" id="expectedVolume"><label>Expected Volume</label><div class="fake">0</div></div>
+        </div>
+
+        <div class="panel-title">Deal Strategy</div>
+        <div class="fields">
+          <div class="field target" id="customerPain"><label>Customer Pain and Objective</label><div class="fake"></div></div>
+          <div class="field target" id="otherStrategy"><label>Strategy Notes</label><div class="fake"></div></div>
+        </div>
+
+        <div class="demo-controls">
+          <h3>Preview only — toggle completion state</h3>
+          <div id="demoButtons" class="demo-buttons"></div>
+        </div>
+      </div>
+
+      <div id="strategy" class="panel tabPage hidden">
+        <div class="panel-title">Strategy &amp; Qualification</div>
+        <div class="fields">
+          <div class="field target" id="winConfidence"><label>Win Confidence</label><div class="fake">Moderate Confidence</div></div>
+          <div class="field target" id="decisionProcess"><label>Decision Process</label><div class="fake"></div></div>
+          <div class="field target" id="decisionCriteria"><label>Decision Criteria</label><div class="fake"></div></div>
+          <div class="field target" id="meddicMetrics"><label>MEDDIC Metrics</label><div class="fake"></div></div>
+        </div>
+      </div>
+
+      <div id="milestones" class="panel tabPage hidden">
+        <div class="panel-title">Milestones</div>
+        <div class="fields">
+          <div class="field target" id="proposalTarget"><label>Proposal Submission Target Date</label><div class="fake"></div></div>
+          <div class="field target" id="estimatedDecision"><label>Estimated Decision Date</label><div class="fake"></div></div>
+          <div class="field target" id="revenueStart"><label>Revenue Start Date</label><div class="fake"></div></div>
+        </div>
+      </div>
+
+      <div id="products" class="panel tabPage hidden">
+        <div class="panel-title">Products &amp; Forecast</div>
+        <div class="subgrid target" id="opportunityProduct">
+          <div class="subgrid-head">Opportunity Products</div>
+          <div class="subgrid-body">No records found.</div>
+        </div>
+      </div>
+
+      <div id="documents" class="panel tabPage hidden">
+        <div class="panel-title">Documents</div>
+        <div class="subgrid"><div class="subgrid-body">Documents area</div></div>
+      </div>
+
+    </div>
+
+    <div class="sidecol">
+      <div class="panel">
+        <div class="panel-title">Critical Dates</div>
+        <div class="side-body">
+          <div class="date-row"><span>Proposal Due Date</span><div class="date-box"></div></div>
+          <div class="date-row"><span>Estimated Decision Date</span><div class="date-box"></div></div>
+          <div class="date-row"><span>Revenue Start Date</span><div class="date-box"></div></div>
+        </div>
+      </div>
+
+      <div class="subgrid target" id="externalStakeholders">
+        <div class="subgrid-head">External Stakeholders</div>
+        <div class="subgrid-body">No data available</div>
+      </div>
+
+      <div class="subgrid target" id="cCode" style="margin-top:12px">
+        <div class="subgrid-head">C-Codes</div>
+        <div class="subgrid-body">No records found.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="nav-toast"></div>
+
+<script>
+const requirements = [
+ {label:"Customer Pain and Objective", target:"customerPain", tab:"summary", complete:true},
+ {label:"Product Summary", target:"productSummary", tab:"summary", complete:true},
+ {label:"Expected Gross Revenue", target:"expectedGrossRevenue", tab:"summary", complete:false},
+ {label:"Expected Volume", target:"expectedVolume", tab:"summary", complete:false},
+ {label:"Win Confidence", target:"winConfidence", tab:"strategy", complete:true},
+ {label:"Opportunity Product", target:"opportunityProduct", tab:"products", complete:false},
+ {label:"C-Code", target:"cCode", tab:"summary", complete:false},
+ {label:"Proposal Submission Target Date", target:"proposalTarget", tab:"milestones", complete:false}
+];
+
+function switchTab(id){
+ document.querySelectorAll(".tabPage").forEach(p=>p.classList.add("hidden"));
+ const page=document.getElementById(id);
+ if(page) page.classList.remove("hidden");
+ document.querySelectorAll(".tab[data-tab]").forEach(t=>t.classList.toggle("active",t.dataset.tab===id));
+}
+
+function toast(text){
+ const el=document.getElementById("toast");
+ el.textContent=text;el.classList.add("show");
+ setTimeout(()=>el.classList.remove("show"),1400);
+}
+
+function navigate(req){
+ switchTab(req.tab);
+ setTimeout(()=>{
+   document.querySelectorAll(".focused").forEach(x=>x.classList.remove("focused"));
+   const target=document.getElementById(req.target);
+   if(!target) return;
+   target.scrollIntoView({behavior:"smooth",block:"center"});
+   target.classList.add("focused");
+   toast("Navigated to: "+req.label);
+   setTimeout(()=>target.classList.remove("focused"),2200);
+ },80);
+}
+
+function render(){
+ const missing=requirements.filter(r=>!r.complete);
+ const completed=requirements.length-missing.length;
+ const pct=Math.round(completed/requirements.length*100);
+
+ document.getElementById("remaining").textContent=missing.length+" remaining";
+ document.getElementById("fill").style.width=pct+"%";
+ document.getElementById("progressText").textContent=completed+" of "+requirements.length+" complete";
+
+ const row=document.getElementById("reqRow");
+ const ready=document.getElementById("ready");
+ const more=document.getElementById("more");
+
+ if(!missing.length){
+   row.classList.add("hidden");more.classList.add("hidden");ready.classList.remove("hidden");
+ } else {
+   ready.classList.add("hidden");row.classList.remove("hidden");
+   row.innerHTML="";
+   const maxVisible=5;
+   missing.slice(0,maxVisible).forEach(req=>{
+      const b=document.createElement("div");
+      b.className="req";
+      b.title="Click to navigate to "+req.label;
+      b.innerHTML='<span class="dot"></span><span>'+req.label+'</span><span class="go">›</span>';
+      b.onclick=()=>navigate(req);
+      row.appendChild(b);
+   });
+   if(missing.length>maxVisible){
+      more.textContent="+"+(missing.length-maxVisible)+" more";
+      more.classList.remove("hidden");
+   }else more.classList.add("hidden");
+ }
+
+ const demos=document.getElementById("demoButtons");
+ demos.innerHTML="";
+ requirements.forEach(req=>{
+   const btn=document.createElement("button");
+   btn.className=req.complete?"done":"";
+   btn.textContent=(req.complete?"✓ ":"○ ")+req.label;
+   btn.onclick=()=>{req.complete=!req.complete;render()};
+   demos.appendChild(btn);
+ });
+}
+
+document.querySelectorAll(".tab[data-tab]").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+render();
+</script>
+</body>
+</html>
