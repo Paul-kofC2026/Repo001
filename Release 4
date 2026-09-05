@@ -1,0 +1,491 @@
+Release 4 — ALM, Environment Promotion & Production Deployment
+
+Release 4 should focus on taking the proven DEV solution and turning it into a repeatable, controlled, supportable enterprise deployment process for TEST/UAT and PROD.
+
+US27 — Implement CI/CD Deployment
+
+Story Points: 8
+
+Title: Implement CI/CD for Azure Function User Provisioning Solution
+
+User Story:
+As the delivery team, I need the provisioning solution deployed through a controlled CI/CD process so that the same approved codebase can be promoted consistently across DEV, TEST/UAT, and PROD.
+
+Business Value:
+Reduces manual deployment risk, improves repeatability, and supports auditability and controlled promotion between environments.
+
+Scope:
+Create or update the source-control and deployment pipeline required to build, validate, package, and deploy the Azure Function solution.
+
+Technical Requirements:
+The pipeline should separate code from environment-specific configuration and should support deployment approvals according to client standards.
+
+Acceptance Criteria:
+
+Function source code is stored in the approved repository.
+Repository branching strategy is documented.
+Build pipeline restores dependencies successfully.
+Build pipeline compiles the .NET isolated Function successfully.
+Automated build failures stop deployment.
+Build output is versioned.
+Deployment artifact is generated consistently.
+DEV deployment can be executed through the approved pipeline.
+Environment-specific configuration is not hard-coded in source code.
+Secrets are not stored in source control.
+Managed Identity configuration is referenced by environment configuration.
+Deployment logs are retained.
+Pipeline identifies which environment is being deployed.
+Higher-environment deployment requires the approved authorization/approval process.
+Deployment does not overwrite unrelated Azure resources.
+Pipeline configuration is documented.
+Rollback or redeployment procedure is documented.
+
+Support Needed If Access Is Missing:
+Azure DevOps/Git Admin for repository and pipeline permissions. Azure/Cloud Admin for service connection or deployment identity setup. InfoSec may need to approve the deployment identity model.
+
+Dependencies: Release 3 solution approved in DEV.
+
+Definition of Done:
+The Function can be built and deployed to DEV through the approved CI/CD process without manual code deployment.
+
+US28 — Provision and Configure TEST/UAT Environment
+
+Story Points: 8
+
+Title: Provision Isolated TEST/UAT Environment for User Provisioning Solution
+
+User Story:
+As the project team, I need an isolated TEST/UAT implementation of the provisioning solution so that business and technical validation can occur without using DEV or PROD resources.
+
+Business Value:
+Provides a controlled environment for integration testing and business acceptance prior to production deployment.
+
+Scope:
+Provision the environment-specific Azure, Entra, Storage, monitoring, and Dataverse configuration required for TEST/UAT.
+
+Technical Requirements:
+TEST/UAT must have its own environment-specific resources and identity. DEV resources or identities must not be reused.
+
+Acceptance Criteria:
+
+TEST/UAT Azure Function App exists.
+TEST/UAT User-Assigned Managed Identity exists.
+TEST/UAT Storage Account exists.
+Graph delta-state Table Storage exists.
+Poison/failure Queue Storage exists.
+Application Insights is configured.
+Log Analytics integration exists where required.
+TEST/UAT UAMI is attached to the TEST/UAT Function.
+TEST/UAT managed identity has approved Graph permissions.
+TEST/UAT managed identity is registered as a Dataverse Application User.
+Approved Dataverse integration security role is assigned.
+TEST/UAT Entra provisioning groups are identified.
+Dataverse environment URL is configured.
+Business Unit mappings are configured.
+Group Team mappings are configured.
+Queue mappings are configured where applicable.
+TEST/UAT resources are isolated from DEV and PROD.
+DEV UAMI cannot access TEST/UAT resources unless explicitly approved.
+TEST/UAT UAMI cannot access PROD resources.
+Environment-specific configuration is documented.
+
+Support Needed If Access Is Missing:
+Azure/Cloud Admin for resource provisioning. Entra/Identity Admin for UAMI and Graph permissions. Power Platform/D365 Admin for Application User, role, team, BU, and queue configuration. Network/InfoSec for environment connectivity validation.
+
+Dependencies: US27.
+
+Definition of Done:
+The complete isolated TEST/UAT platform is configured and ready to receive the deployment artifact.
+
+US29 — Deploy Solution to TEST/UAT
+
+Story Points: 5
+
+Title: Deploy Approved Provisioning Solution to TEST/UAT
+
+User Story:
+As the delivery team, I need to deploy the approved provisioning solution to TEST/UAT so that the complete solution can be validated outside DEV.
+
+Business Value:
+Confirms that the solution is portable and that environment-specific configuration works correctly.
+
+Scope:
+Deploy the approved release artifact to the TEST/UAT Function App using the CI/CD process.
+
+Technical Requirements:
+The same build artifact or approved release version should be promoted rather than rebuilding different code per environment where client ALM standards permit.
+
+Acceptance Criteria:
+
+Approved release artifact is selected.
+Deployment occurs through the approved CI/CD process.
+Correct TEST/UAT Function App is targeted.
+TEST/UAT-specific configuration is applied.
+DEV configuration is not copied unintentionally.
+Managed Identity authentication works in TEST/UAT.
+Function starts successfully.
+Timer trigger executes.
+Graph authentication succeeds.
+Dataverse authentication succeeds.
+Storage connectivity succeeds.
+Application Insights receives telemetry.
+No runtime client secrets are introduced.
+Deployment result is documented.
+Version deployed to TEST/UAT is traceable to source-control commit/build.
+Failed deployment can be rolled back or redeployed using the documented procedure.
+
+Support Needed If Access Is Missing:
+Azure DevOps/Release Admin for deployment approval and pipeline access. Azure/Cloud Admin if pipeline deployment identity lacks access to the TEST/UAT Function App.
+
+Dependencies: US27, US28.
+
+Definition of Done:
+The approved Release 3 solution is running successfully in TEST/UAT through the controlled deployment pipeline.
+
+US30 — Validate TEST/UAT Technical Integration
+
+Story Points: 5
+
+Title: Validate End-to-End Technical Integration in TEST/UAT
+
+User Story:
+As the project team, I need to validate the solution's technical integrations in TEST/UAT so that environment-specific issues are discovered before formal business acceptance testing.
+
+Business Value:
+Reduces UAT disruption by identifying configuration or connectivity issues before business testers begin.
+
+Scope:
+Execute technical smoke and integration tests across Graph, Azure Function, Storage, Dataverse, security, telemetry, and failure handling.
+
+Acceptance Criteria:
+
+Timer-trigger execution succeeds.
+Function runs using TEST/UAT UAMI.
+Graph token acquisition succeeds.
+Approved Entra group data can be read.
+Initial delta synchronization succeeds.
+Delta state is persisted.
+Incremental membership change is detected.
+Dataverse authentication succeeds.
+Candidate user eligibility can be evaluated.
+Existing-user lookup works.
+Missing-user provisioning works where approved for testing.
+User-context security validation works.
+Business Unit validation works.
+Group Team access validation works.
+Effective-role validation works.
+Queue validation works where applicable.
+Retry behavior works.
+Poison queue behavior works.
+Application Insights telemetry is complete.
+No DEV resource dependency is detected.
+No PROD dependency is detected.
+Test results are documented.
+
+Support Needed If Access Is Missing:
+Entra/Identity Admin, Power Platform/D365 Admin, Azure/Storage Admin, and Monitoring Support depending on where integration issues are discovered.
+
+Dependencies: US29.
+
+Definition of Done:
+All agreed technical integration tests pass in TEST/UAT with no critical environment-specific defects.
+
+US31 — Execute Business User Acceptance Testing
+
+Story Points: 8
+
+Title: Execute Business UAT for Automated User Provisioning
+
+User Story:
+As the business owner, I need to validate the provisioning solution against approved real-world onboarding scenarios so that I can confirm it meets business requirements before production deployment.
+
+Business Value:
+Provides formal business acceptance that the solution solves the original onboarding problem.
+
+Scope:
+Execute approved positive, negative, and operational business scenarios.
+
+Technical Requirements:
+UAT should validate the entire process from Entra group membership through business readiness without requiring first interactive login.
+
+Acceptance Criteria:
+
+UAT test plan is approved.
+Approved test users are available.
+Positive onboarding scenario passes.
+Existing-user reconciliation scenario passes.
+Ineligible-user scenario is handled correctly.
+Disabled-user scenario is handled correctly where applicable.
+Duplicate processing does not create duplicate Dataverse users.
+Never-logged-in user is provisioned successfully.
+Expected Business Unit is confirmed.
+Expected Group Team access is confirmed.
+Expected effective security is confirmed.
+Queue access is confirmed where required.
+Approved record ownership/readiness scenario succeeds.
+Retry scenario is validated.
+Failure/poison-queue scenario is validated.
+Monitoring/alert scenario is validated where part of UAT.
+No manual first login is required for readiness.
+UAT evidence is captured.
+Defects are documented and resolved or formally accepted.
+Business owner signs off on UAT completion.
+
+Support Needed If Access Is Missing:
+Business Application Owner for test cases and acceptance. Power Platform/D365 Admin for test-data/security troubleshooting. Entra Admin for controlled test-user/group operations. Application Support for operational validation.
+
+Dependencies: US30.
+
+Definition of Done:
+Business stakeholders formally accept the solution based on successful UAT results.
+
+US32 — Prepare Production Deployment Readiness
+
+Story Points: 5
+
+Title: Complete Production Readiness Review for User Provisioning Solution
+
+User Story:
+As the delivery and operations teams, I need production deployment prerequisites reviewed and approved so that production rollout occurs in a controlled and supportable manner.
+
+Business Value:
+Reduces production deployment risk and ensures operational ownership is clear before go-live.
+
+Scope:
+Complete production checklist, approvals, support model, rollback plan, monitoring, configuration review, and change-management requirements.
+
+Acceptance Criteria:
+
+PROD deployment checklist is completed.
+UAT approval is documented.
+Production change ticket is approved where required.
+Production resource naming is approved.
+Production UAMI design is approved.
+Required Graph permissions are approved.
+Dataverse Application User design is approved.
+Dataverse security role is approved.
+Storage permissions are approved.
+Monitoring and alert recipients are approved.
+Support ownership is documented.
+Incident/escalation path is documented.
+Rollback procedure is documented.
+Production configuration values are reviewed.
+No DEV or TEST/UAT endpoints are present in PROD configuration.
+No secrets are introduced into runtime configuration.
+Network/InfoSec approval is complete.
+Go-live window is confirmed.
+
+Support Needed If Access Is Missing:
+Change Management, InfoSec, Azure/Cloud Admin, Entra/Identity Admin, Power Platform/D365 Admin, Application Support, and Business Owner.
+
+Dependencies: US31.
+
+Definition of Done:
+All technical, operational, security, and business prerequisites for production deployment are formally approved.
+
+US33 — Provision Production Azure and Identity Resources
+
+Story Points: 8
+
+Title: Provision Isolated Production Infrastructure and Managed Identity
+
+User Story:
+As the platform team, I need production-specific Azure and identity resources so that the provisioning solution can operate securely without sharing lower-environment resources.
+
+Business Value:
+Provides secure environment isolation and prevents lower-environment identities from accessing production.
+
+Scope:
+Provision the full PROD resource set according to approved architecture.
+
+Acceptance Criteria:
+
+Production Function App exists.
+Production UAMI exists.
+Production Storage Account exists.
+Production delta-state Table exists.
+Production poison Queue exists.
+Production Application Insights exists.
+Log Analytics integration exists where required.
+Production UAMI is attached to Production Function App.
+PROD resources use approved production naming standards.
+PROD resources are isolated from lower environments.
+DEV and TEST/UAT UAMIs cannot access PROD resources.
+Resource RBAC follows least privilege.
+Production monitoring configuration exists.
+Production resources are documented.
+
+Support Needed If Access Is Missing:
+Azure/Cloud Admin and Azure RBAC Admin. Your current non-production permissions should not be assumed to provide access to production.
+
+Dependencies: US32.
+
+Definition of Done:
+All approved production Azure resources and the production managed identity exist and are ready for service permissions/configuration.
+
+US34 — Configure Production Graph and Dataverse Security
+
+Story Points: 8
+
+Title: Configure Production Managed Identity Access to Graph and Dataverse
+
+User Story:
+As the security/platform team, I need the production managed identity configured with approved Graph and Dataverse permissions so that the production Function can operate securely using least privilege.
+
+Business Value:
+Establishes the security trust required for production without using client secrets or over-privileged identities.
+
+Scope:
+Configure Graph application permissions, Dataverse Application User, custom security role, and required Azure data-plane permissions.
+
+Acceptance Criteria:
+
+Production UAMI/service principal is available in Entra.
+Approved Graph application permissions are assigned.
+Required admin approval/consent is completed.
+Production UAMI can acquire Graph token.
+Production UAMI is registered as a Dataverse Application User.
+Approved custom provisioning role is assigned.
+Required impersonation capability is present if approved.
+UAMI has required Table Storage data access.
+UAMI has required Queue Storage data access.
+No System Administrator role is assigned unless explicitly approved.
+No client secret is used.
+Production permissions match approved security documentation.
+Access is limited to production resources/environment as designed.
+Security validation evidence is captured.
+
+Support Needed If Access Is Missing:
+Entra/Identity Admin, Power Platform/D365 Admin, Azure RBAC Admin, and InfoSec.
+
+Dependencies: US33.
+
+Definition of Done:
+Production UAMI can authenticate to all required services using the approved least-privilege security model.
+
+US35 — Deploy Solution to Production
+
+Story Points: 8
+
+Title: Deploy Automated User Provisioning Solution to Production
+
+User Story:
+As the delivery team, I need to deploy the approved solution to production through the controlled release process so that automated user provisioning can begin supporting business operations.
+
+Business Value:
+Delivers the production capability that eliminates manual pre-login Dataverse user provisioning.
+
+Scope:
+Promote the approved release artifact into PROD using the approved CI/CD and change-management process.
+
+Acceptance Criteria:
+
+Approved release version is identified.
+Production change approval is active.
+Deployment uses the approved CI/CD pipeline.
+Correct PROD Function App is targeted.
+Production-specific configuration is applied.
+Production UAMI is selected.
+No DEV or TEST/UAT configuration remains.
+Function deployment succeeds.
+Function starts successfully.
+Managed Identity token acquisition succeeds.
+Graph connectivity succeeds.
+Dataverse connectivity succeeds.
+Storage connectivity succeeds.
+Application Insights receives telemetry.
+Deployment version is recorded.
+Deployment logs are retained.
+Rollback remains available if smoke testing fails.
+
+Support Needed If Access Is Missing:
+Azure DevOps/Release Admin for production deployment approval. Azure/Cloud Admin for deployment target permissions. Change Management for the production window.
+
+Dependencies: US32–US34.
+
+Definition of Done:
+The approved release is successfully deployed to PROD and is ready for controlled production validation.
+
+US36 — Execute Production Smoke Test
+
+Story Points: 5
+
+Title: Validate Production Provisioning Solution After Deployment
+
+User Story:
+As the operations team, I need to perform a controlled production smoke test after deployment so that we can confirm the production solution works before declaring go-live successful.
+
+Business Value:
+Detects configuration or permission problems immediately after deployment and reduces business impact.
+
+Scope:
+Execute a limited, approved production validation scenario.
+
+Acceptance Criteria:
+
+Function executes on schedule.
+Production UAMI authentication works.
+Microsoft Graph connectivity succeeds.
+Delta-state storage is accessible.
+Dataverse authentication succeeds.
+Monitoring telemetry is generated.
+Approved test membership change is detected where production testing permits.
+Candidate processing behaves correctly.
+No unintended user provisioning occurs.
+No lower-environment resources are accessed.
+No critical errors appear in Application Insights.
+No unexpected poison messages are generated.
+Smoke-test results are documented.
+Business/technical owner confirms successful production validation.
+
+Support Needed If Access Is Missing:
+Entra/Identity Admin for controlled production group membership test. Power Platform/D365 Admin for Dataverse validation. Application Support for telemetry and operational confirmation.
+
+Dependencies: US35.
+
+Definition of Done:
+Production smoke testing passes with no critical issues and the production solution is approved to remain active.
+
+US37 — Transition Solution to Operational Support
+
+Story Points: 5
+
+Title: Complete Operational Handoff and Support Readiness
+
+User Story:
+As the support organization, I need documentation, monitoring access, troubleshooting procedures, and escalation paths so that the solution can be supported after go-live.
+
+Business Value:
+Ensures the solution does not depend solely on the implementation developer after production release.
+
+Scope:
+Complete support documentation, runbooks, monitoring access, failure handling, reprocessing procedures, and operational ownership.
+
+Acceptance Criteria:
+
+Support runbook is completed.
+Architecture diagram is current.
+Environment/resource inventory is documented.
+UAMI identifiers are documented without exposing secrets.
+Graph permission configuration is documented.
+Dataverse Application User configuration is documented.
+Security-role configuration is documented.
+Delta-state recovery procedure is documented.
+Poison queue investigation procedure is documented.
+Reprocessing procedure is documented.
+Application Insights queries are documented.
+Alert ownership is assigned.
+Escalation contacts are documented.
+Known limitations are documented.
+Sandbox/environment refresh procedure is documented.
+Support team has required read/troubleshooting access.
+Knowledge-transfer session is completed.
+Operational owner accepts support responsibility.
+
+Support Needed If Access Is Missing:
+Application Support Manager, Azure Monitoring Admin, Power Platform/D365 Admin, Entra/Identity Admin, and Service Management team.
+
+Dependencies: US36.
+
+Definition of Done:
+The support organization accepts operational ownership with the access, documentation, and procedures necessary to support the production solution.
