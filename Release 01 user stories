@@ -1,0 +1,378 @@
+Release 1 — Connectivity / Technical Proof
+US01 — Provision DEV Azure Resources
+
+Title: Provision DEV Azure Resources for Automated User Provisioning
+
+User Story:
+As a Dynamics 365 provisioning developer, I need the required Azure resources provisioned in the DEV environment so that the automated user-provisioning solution has an isolated platform for execution, state management, monitoring, and failure handling.
+
+Business Value:
+Provides the technical foundation required to build and test the solution without impacting TEST/UAT or PROD.
+
+Scope:
+Provision the DEV resource set required by the solution, including Azure Function App, hosting/runtime resources, Azure Storage Account, Table Storage, Queue Storage, Application Insights, Log Analytics where required, and a User-Assigned Managed Identity.
+
+Technical Requirements:
+The environment should follow the approved client naming and resource-isolation standards. The Function App should support the approved .NET isolated runtime. The Storage Account must support both Table Storage and Queue Storage. Application Insights must be connected to the Function App. DEV resources must be isolated from future TEST/UAT and PROD resources.
+
+Acceptance Criteria:
+
+A DEV Azure Function App exists in the approved CRM non-production scope.
+The Function App supports the approved .NET isolated runtime.
+A DEV Storage Account exists.
+A Table Storage table exists for Graph synchronization state.
+A Queue exists for failed/poison processing.
+Application Insights is connected to the DEV Function App.
+Required Log Analytics integration exists if mandated by the client.
+A DEV User-Assigned Managed Identity exists.
+All resource names comply with client naming standards.
+Resources are deployed only to the approved DEV/non-production environment.
+Developer has required access or identified administrator support to work with each resource.
+
+Suggested Definition of Done:
+All DEV Azure resources are provisioned, visible, accessible to the appropriate teams, and ready for configuration by subsequent stories.
+
+Dependencies: None.
+
+
+
+
+US02 — Configure User-Assigned Managed Identity
+
+Title: Configure User-Assigned Managed Identity for DEV Provisioning Function
+
+User Story:
+As the automated provisioning service, I need to execute under a dedicated User-Assigned Managed Identity so that I can authenticate securely to Microsoft Graph, Azure resources, and Dataverse without storing client secrets or passwords.
+
+Business Value:
+Removes secret-management risk and aligns the solution with the client's zero-secret security architecture.
+
+Scope:
+Configure the DEV UAMI, attach it to the Function App, and prepare it to receive permissions for Microsoft Graph, Azure Storage, and Dataverse.
+
+Technical Requirements:
+The Function App must explicitly use the DEV UAMI rather than relying on a shared identity. The UAMI's Client ID, Principal/Object ID, and Resource ID should be documented as environment configuration. The runtime code should be capable of selecting the UAMI explicitly where needed.
+
+Acceptance Criteria:
+
+A dedicated DEV UAMI is available.
+The UAMI is attached to the DEV Function App.
+The Function App can resolve and use the intended managed identity.
+No client secret is required for the Function to authenticate as the UAMI.
+UAMI Client ID, Principal/Object ID, and Resource ID are documented.
+The identity is scoped only to the DEV environment.
+The UAMI is not shared with TEST/UAT or PROD.
+Managed-identity authentication can be validated from the Function runtime.
+
+Suggested Definition of Done:
+The DEV Function runs under the approved UAMI and can successfully request an Azure identity token without using a stored secret.
+
+Dependencies: US01.
+
+
+
+US03 — Configure Microsoft Graph Access
+
+Title: Configure Microsoft Graph Access for DEV Managed Identity
+
+User Story:
+As the provisioning service, I need approved Microsoft Graph permissions so that I can identify changes to the designated Entra security groups and retrieve the user information required for provisioning.
+
+Business Value:
+Allows the solution to automatically detect onboarding events without relying on manual processes or public webhooks.
+
+Scope:
+Grant and validate the approved least-privilege Microsoft Graph application permissions for the DEV UAMI/service principal.
+
+Technical Requirements:
+Graph access must support group delta queries, group membership retrieval, and the required user properties. Permissions should be reviewed by Identity/InfoSec and limited to the minimum approved level.
+
+Acceptance Criteria:
+
+The DEV UAMI/service principal is visible in Entra.
+Required Microsoft Graph application permissions are assigned.
+Required administrator consent/approval is completed.
+The Function can obtain a Graph access token using managed identity.
+The Function can query the approved target group or groups.
+The Function can retrieve required user properties.
+Unauthorized groups/resources are not intentionally added to solution scope.
+No Graph client secret is stored in Function configuration.
+Graph authorization failures are logged in a diagnosable manner.
+
+Suggested Definition of Done:
+A test execution from the DEV Function successfully authenticates to Graph using the UAMI and returns data from an approved provisioning group.
+
+Dependencies: US02.
+
+
+
+US04 — Configure Dataverse Application User
+
+Title: Register DEV Managed Identity as a Dataverse Application User
+
+User Story:
+As the provisioning service, I need my managed identity registered as an Application User in DEV Dataverse so that the Azure Function can authenticate securely to the Dataverse Web API.
+
+Business Value:
+Establishes the passwordless trust relationship required for automated user provisioning into Dynamics 365.
+
+Scope:
+Register the DEV UAMI as a Dataverse Application User in the target DEV environment and validate authentication.
+
+Technical Requirements:
+The Application User must correspond to the environment-specific DEV managed identity. It must not use a client secret. The Application User should ultimately receive a dedicated least-privilege security role rather than System Administrator.
+
+Acceptance Criteria:
+
+DEV UAMI is registered as a Dataverse Application User.
+The Application User is created in the correct DEV Dataverse environment.
+The Application User is enabled and valid.
+Managed-identity authentication to the Dataverse endpoint succeeds.
+A Dataverse access token can be acquired by the DEV Function.
+A basic Dataverse Web API request succeeds.
+The Application User is not configured with a client secret.
+Application User identity details are documented.
+
+Suggested Definition of Done:
+The Function can authenticate to DEV Dataverse as the UAMI-backed Application User and successfully execute an approved read-only API call.
+
+Dependencies: US02.
+
+
+
+US05 — Configure Least-Privilege Dataverse Provisioning Role
+
+Title: Configure Least-Privilege Dataverse Security Role for Provisioning Integration
+
+User Story:
+As a Power Platform security administrator, I need the provisioning Application User to have only the Dataverse privileges required by the solution so that automated provisioning can operate without granting unnecessary administrative access.
+
+Business Value:
+Reduces security exposure and supports InfoSec least-privilege requirements.
+
+Scope:
+Create or configure a dedicated integration security role for the provisioning Application User.
+
+Technical Requirements:
+The role should support the approved user lookup and future provisioning operations while avoiding System Administrator where possible. Impersonation and advanced provisioning privileges should be added only when validated in later stories.
+
+Acceptance Criteria:
+
+A dedicated provisioning integration security role exists in DEV.
+The role is assigned to the UAMI-backed Application User.
+The Application User can perform all Release 1 Dataverse connectivity/read operations.
+The Application User does not require System Administrator for Release 1.
+Required table/entity privileges are documented.
+Any privilege not yet validated for later provisioning is clearly identified as pending.
+Security role configuration is reproducible for higher environments.
+Access failures caused by missing privileges are logged and traceable.
+
+Suggested Definition of Done:
+The Application User can authenticate and perform all Release 1 Dataverse validation operations using the custom role only.
+
+Dependencies: US04.
+
+
+
+US06 — Configure Provisioning Mappings
+
+Title: Configure Environment-Specific Provisioning Mappings
+
+User Story:
+As a provisioning administrator, I need environment-specific provisioning configuration externalized from code so that the same solution can be deployed across environments without code changes.
+
+Business Value:
+Supports maintainability, environment isolation, and future promotion to TEST/UAT and PROD.
+
+Scope:
+Define DEV configuration for Entra groups, Dataverse environment, Business Units, Group Teams, queues, synchronization state, and other environment-specific values.
+
+Technical Requirements:
+Configuration must not contain secrets. Values should be stored in the approved Function configuration mechanism or other approved environment-specific configuration store.
+
+Acceptance Criteria:
+
+DEV Dataverse environment URL is configurable.
+Target Entra group Object IDs are configurable.
+Business Unit mapping is configurable.
+Dataverse Group Team mapping is configurable.
+Queue configuration is configurable if applicable.
+Graph synchronization table name is configurable.
+Poison queue name is configurable.
+Managed Identity Client ID is configurable if explicitly required by runtime.
+Timer schedule is configurable.
+No environment-specific values are hard-coded in business logic.
+No client secret, password, or access token is stored in configuration.
+Configuration values are documented.
+
+Suggested Definition of Done:
+The Function can start successfully using DEV configuration without requiring source-code changes for environment values.
+
+Dependencies: US01–US05.
+
+US07 — Implement Scheduled Provisioning Trigger
+
+Title: Implement Timer-Triggered Provisioning Function
+
+User Story:
+As a provisioning administrator, I need the provisioning Function to execute automatically on a configured schedule so that Entra membership changes are detected without manual intervention.
+
+Business Value:
+Provides the automated execution mechanism for the zero-touch onboarding process.
+
+Scope:
+Create the timer-triggered Azure Function and basic execution framework.
+
+Technical Requirements:
+The proposed schedule is every five minutes unless changed by the client. The schedule should be configuration-driven. Each invocation should generate a correlation ID and log start, completion, duration, and environment.
+
+Acceptance Criteria:
+
+Timer-triggered Function is implemented.
+Timer schedule is environment configurable.
+Function executes automatically according to the configured DEV schedule.
+Manual/test execution is possible through the approved development method.
+Each execution records a unique correlation ID.
+Invocation start time is logged.
+Invocation completion status is logged.
+Execution duration is logged.
+Environment identifier is included in telemetry.
+Overlapping execution behavior is understood and controlled.
+Function failure does not permanently stop future scheduled runs.
+
+Suggested Definition of Done:
+The DEV Function executes repeatedly on schedule and produces a successful telemetry record for each invocation.
+
+Dependencies: US01, US02, US06.
+
+US08 — Implement Initial Microsoft Graph Delta Synchronization
+
+Title: Establish Initial Microsoft Graph Group Delta Baseline
+
+User Story:
+As the provisioning service, I need to establish an initial Microsoft Graph delta synchronization state so that I can begin tracking changes to the approved Entra provisioning groups.
+
+Business Value:
+Creates the baseline needed to detect future membership changes efficiently.
+
+Scope:
+Call the Microsoft Graph group delta endpoint for the approved groups, process all returned pages, and capture the final synchronization state.
+
+Technical Requirements:
+The implementation must follow Graph pagination until the final delta response is reached. Group membership changes must be included in the delta query. The initial run should be distinguishable from subsequent incremental runs.
+
+Acceptance Criteria:
+
+Function successfully calls the Microsoft Graph groups delta endpoint.
+Query is limited to the approved provisioning groups where supported by the agreed design.
+Membership changes are included in the synchronization model.
+All @odata.nextLink pages are followed.
+No pages are skipped.
+The final response returns an @odata.deltaLink.
+The complete delta URL is captured.
+Initial-baseline processing is distinguishable in telemetry.
+Graph errors are logged with correlation information.
+The solution does not require a public Graph webhook.
+
+Suggested Definition of Done:
+The DEV Function successfully completes an initial Graph delta cycle and obtains the final delta synchronization URL.
+
+Dependencies: US03, US06, US07.
+
+US09 — Persist Microsoft Graph Delta State
+
+Title: Persist Graph Delta Synchronization State in Azure Table Storage
+
+User Story:
+As the provisioning service, I need to persist the Graph delta synchronization state so that subsequent Function executions continue from the previous synchronization point rather than rebuilding the baseline every time.
+
+Business Value:
+Reduces unnecessary Graph calls, improves performance, and allows reliable incremental synchronization.
+
+Scope:
+Store and retrieve the complete Graph delta synchronization URL using Azure Table Storage.
+
+Technical Requirements:
+The Function's managed identity must have appropriate data-plane access to the Table Storage resource. Delta state should be environment-specific and support future expansion to multiple group scopes if required.
+
+Acceptance Criteria:
+
+A Graph delta-state table exists.
+The Function UAMI can write to the table.
+The Function UAMI can read from the table.
+The complete @odata.deltaLink URL is stored.
+State is associated with the correct DEV environment.
+State can be associated with the relevant synchronization scope.
+Subsequent Function execution retrieves the saved delta state.
+State survives Function restarts and deployments.
+Missing state causes controlled baseline initialization.
+Invalid storage access produces a logged, diagnosable error.
+Secrets or access keys are not required by application code.
+
+Suggested Definition of Done:
+A completed delta cycle writes its synchronization URL to Table Storage, and the next Function execution successfully retrieves and uses that stored value.
+
+Dependencies: US02, US08.
+
+US10 — Process Incremental Entra Group Membership Changes
+
+Title: Detect Incremental Entra Group Membership Changes Using Graph Delta
+
+User Story:
+As the provisioning service, I need to process incremental changes from the saved Graph delta state so that newly added users can be identified for downstream Dataverse provisioning without repeatedly processing unchanged memberships.
+
+Business Value:
+Proves the primary onboarding trigger for the automated provisioning solution.
+
+Scope:
+Use the persisted delta state to detect membership changes occurring after the initial baseline.
+
+Technical Requirements:
+The Function should load the saved delta URL, execute the delta request, follow pagination, identify relevant membership additions or changes, and update the saved delta state when processing completes successfully.
+
+Acceptance Criteria:
+
+Function retrieves the previously stored delta URL.
+Function calls Graph using the saved delta state.
+All returned delta pages are processed.
+A test user added to an approved Entra group is detected.
+The detected user Object ID is captured.
+Required user attributes are retrieved or resolvable.
+Unchanged memberships are not treated as new onboarding events.
+Duplicate delta events do not cause duplicate processing.
+Relevant group information is associated with the detected user.
+New delta state is persisted only after successful processing.
+Processing results include correlation ID and target user identifier.
+Membership changes are available for downstream Release 2 eligibility/provisioning logic.
+No Dataverse user creation is required to satisfy this Release 1 story.
+
+Suggested Definition of Done:
+After establishing the initial baseline, a test user is added to an approved Entra group. Within the configured polling interval, the Function detects the membership change using the persisted Graph delta state and logs the user as an onboarding candidate.
+
+Dependencies: US08, US09.
+
+Release 1 overall acceptance criteria
+
+Release 1 is complete when the following end-to-end technical proof succeeds:
+
+Approved Entra Group
+        ↓
+Test user is added
+        ↓
+Microsoft Graph
+        ↓
+Timer-triggered Azure Function
+        ↓
+User-Assigned Managed Identity
+        ↓
+Retrieve saved Graph delta state
+        ↓
+Process incremental group change
+        ↓
+Identify onboarding candidate
+        ↓
+Persist new delta state
+        ↓
+Log successful execution
+
+The Release 1 demonstration should prove that the DEV Azure platform, managed identity, Graph connectivity, Dataverse identity foundation, scheduled execution, delta synchronization, and persistent change tracking all work without runtime secrets.
