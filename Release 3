@@ -1,0 +1,321 @@
+Release 3 — Production Hardening, Reliability & Operations
+
+Release 3 should focus on making the Release 2 capability reliable, recoverable, observable, and supportable before moving into UAT and production promotion.
+
+US20 — Implement Transient Retry Handling
+
+Story Points: 5
+
+Title: Implement Retry and Backoff for Transient Integration Failures
+
+User Story:
+As the provisioning service, I need transient failures from Microsoft Graph, Dataverse, and Azure dependencies to be retried automatically so that short-lived service issues do not cause user provisioning to fail permanently.
+
+Business Value:
+Improves resilience and reduces manual support effort caused by temporary API throttling, network interruptions, or downstream service instability.
+
+Scope:
+Implement controlled retry behavior for approved transient failure scenarios across Graph, Dataverse, Azure Storage, and other runtime dependencies used by the provisioning process.
+
+Technical Requirements:
+The retry strategy should differentiate transient from non-transient errors, support bounded retries, use exponential backoff with jitter where appropriate, and honor service-provided retry guidance such as Retry-After.
+
+Acceptance Criteria:
+
+Retryable error categories are documented.
+Microsoft Graph 429 throttling responses are handled.
+Approved Dataverse throttling/transient responses are handled.
+Approved 408 and transient 5xx failures are handled.
+Azure Storage transient failures are retried where appropriate.
+Retry count is bounded and configurable.
+Backoff behavior is implemented.
+Service-provided Retry-After guidance is honored where applicable.
+Non-retryable failures are not repeatedly retried.
+Every retry attempt is logged with the same correlation ID.
+Retry telemetry includes operation, attempt number, delay, and outcome.
+Successful recovery after a transient failure continues normal processing.
+Exhausted retries are routed to the failure-handling path.
+Retry logic does not create duplicate Dataverse users or duplicate business operations.
+
+Support Needed If Access Is Missing:
+Usually none for coding. Azure/Cloud or Network support may be required if repeated failures are caused by connectivity restrictions rather than transient service behavior.
+
+Dependencies: US10–US19.
+
+Definition of Done:
+Controlled test failures demonstrate that retryable errors recover automatically while permanent errors are not retried indefinitely.
+
+US21 — Implement Poison / Failed Processing Queue
+
+Story Points: 5
+
+Title: Persist Failed Provisioning Operations for Support and Reprocessing
+
+User Story:
+As an operations/support team, I need failed provisioning operations retained after automatic retries are exhausted so that no onboarding failure is silently lost.
+
+Business Value:
+Provides operational recovery and auditability for provisioning failures.
+
+Scope:
+Implement a poison/failure queue using the approved Azure Storage Queue or equivalent client-standard mechanism.
+
+Technical Requirements:
+Failure messages must contain sufficient diagnostic context without exposing secrets or unnecessary sensitive data.
+
+Acceptance Criteria:
+
+A dedicated DEV failure/poison queue exists.
+The Function UAMI can write messages to the queue.
+Failed operations are queued only after the approved retry policy is exhausted or when the error is explicitly non-retryable.
+Failure messages include correlation ID.
+Failure messages include target user identifier.
+Failure messages include environment.
+Failure messages identify the failed processing step.
+Failure messages contain a sanitized error code/message.
+Failure messages include failure timestamp.
+Secrets, tokens, passwords, or client credentials are never written to the queue.
+Queue write failure is logged separately.
+Duplicate poison messages are controlled where practical.
+Support personnel can retrieve failed messages using approved access.
+Failed users can be identified for later reprocessing.
+
+Support Needed If Access Is Missing:
+Azure/Storage Admin to create/configure the Queue and assign appropriate Queue Storage data permissions to the Function UAMI and approved support personnel.
+
+Dependencies: US20.
+
+Definition of Done:
+A deliberately failed provisioning event is routed to the poison queue with enough information for support to understand what failed and identify the affected user.
+
+US22 — Recover from Invalid Microsoft Graph Delta State
+
+Story Points: 5
+
+Title: Implement Controlled Recovery from Invalid Graph Delta Synchronization State
+
+User Story:
+As the provisioning service, I need to recover when the stored Microsoft Graph delta state becomes unusable so that synchronization can resume without manual reconstruction of the entire solution.
+
+Business Value:
+Prevents a broken delta cursor from permanently stopping automated onboarding.
+
+Scope:
+Detect invalid delta state and re-establish a clean synchronization baseline according to the approved Graph recovery pattern.
+
+Technical Requirements:
+The solution must distinguish a Graph delta-state failure from an ordinary API failure and must avoid advancing synchronization state incorrectly.
+
+Acceptance Criteria:
+
+The Function detects an invalid/unusable Graph delta state.
+The invalid state is not reused indefinitely.
+The failure is logged with correlation ID and synchronization scope.
+A controlled baseline reinitialization is triggered.
+Existing valid users are not unnecessarily re-provisioned.
+The solution avoids creating duplicate Dataverse users during recovery.
+Pagination is processed correctly during the rebuilt baseline.
+A new valid delta state is obtained.
+The replacement delta state is persisted successfully.
+Normal incremental processing resumes after recovery.
+A baseline reset is visible in telemetry.
+Support can distinguish normal initial baseline from recovery baseline.
+Failure to rebuild the baseline is routed into operational failure handling.
+
+Support Needed If Access Is Missing:
+Azure/Storage Admin if manual clearing or inspection of the saved delta-state record is required and your account cannot access Table Storage. Entra/Identity support may be needed if recovery failures are caused by Graph authorization changes.
+
+Dependencies: US09, US10, US20.
+
+Definition of Done:
+A deliberately invalidated delta state causes the Function to rebuild synchronization state and return to normal incremental processing without duplicate provisioning.
+
+US23 — Implement End-to-End Provisioning Telemetry
+
+Story Points: 5
+
+Title: Implement End-to-End Application Telemetry and Correlation
+
+User Story:
+As a support engineer, I need each provisioning execution traceable from Graph detection through Dataverse readiness so that I can troubleshoot failures quickly and understand where processing stopped.
+
+Business Value:
+Reduces mean time to diagnose and provides operational visibility across the full provisioning lifecycle.
+
+Scope:
+Implement structured telemetry across all major processing stages.
+
+Technical Requirements:
+A single correlation ID should follow the user/provisioning transaction through Graph processing, eligibility, Dataverse lookup/provisioning, security validation, and completion/failure.
+
+Acceptance Criteria:
+
+Every scheduled Function invocation has a correlation ID.
+Each provisioning candidate has traceable processing context.
+Telemetry records the environment.
+Telemetry records the target user identifier.
+Telemetry identifies the source Entra group.
+Graph request outcome is logged.
+Eligibility outcome is logged.
+Dataverse user lookup outcome is logged.
+User provisioning outcome is logged.
+Security-context activation outcome is logged.
+Business Unit validation outcome is logged.
+Group Team/security-role validation outcome is logged.
+Queue validation outcome is logged where applicable.
+Record-readiness outcome is logged.
+Operation durations are captured for key external calls.
+Retry activity is correlated to the original operation.
+Poison-queue activity is correlated to the original operation.
+Errors contain sufficient technical detail for support without exposing secrets.
+No access tokens, client secrets, passwords, or sensitive authentication headers are logged.
+A support engineer can trace a test user from initial detection to final success/failure using the correlation information.
+
+Support Needed If Access Is Missing:
+Azure Monitoring/Application Insights Admin if your Monitoring Reader access is insufficient to configure telemetry settings, retention, diagnostic settings, workbooks, or custom views.
+
+Dependencies: Can begin earlier, but should be completed after US20–US22 and integrated across US11–US19.
+
+Definition of Done:
+A support engineer can locate a test provisioning event in Application Insights and follow the complete execution path from detection through final outcome.
+
+US24 — Configure Operational Monitoring and Alerts
+
+Story Points: 5
+
+Title: Configure Monitoring and Alerts for Provisioning Failures
+
+User Story:
+As the application support team, I need proactive monitoring and alerts for provisioning failures so that issues can be addressed before they cause significant onboarding impact.
+
+Business Value:
+Moves support from reactive troubleshooting to proactive operational management.
+
+Scope:
+Configure approved Application Insights/Azure Monitor queries, dashboards/workbooks, and alerts.
+
+Technical Requirements:
+Alerting should focus on actionable failures and avoid creating excessive noise from isolated transient errors that recover automatically.
+
+Acceptance Criteria:
+
+Function execution failures can be monitored.
+Provisioning failures can be monitored.
+Repeated retry exhaustion can be monitored.
+Poison queue activity can be monitored.
+Graph authentication/authorization failures can be identified.
+Dataverse authentication/authorization failures can be identified.
+A sustained absence of expected Function execution can be detected if required.
+Alert thresholds are documented.
+Alert recipients/support group are defined.
+Alerts include environment context.
+Alerts provide sufficient information or links for investigation.
+Test alerts can be generated successfully.
+Resolved transient failures do not unnecessarily create critical alerts unless client policy requires it.
+Support has access to the monitoring views needed for diagnosis.
+
+Support Needed If Access Is Missing:
+Azure Monitoring Admin to create alert rules, action groups, workbooks, diagnostic settings, or grant appropriate scoped monitoring-management permissions. Application Support team to provide distribution lists/on-call destinations and severity expectations.
+
+Dependencies: US21 and US23.
+
+Definition of Done:
+A controlled provisioning failure generates the agreed operational alert and provides support with enough information to begin investigation.
+
+US25 — Validate Least-Privilege and Production Security Model
+
+Story Points: 8
+
+Title: Validate Provisioning Solution Security and Least-Privilege Model
+
+User Story:
+As an Information Security stakeholder, I need the provisioning solution's identities, permissions, network behavior, and data handling validated before promotion so that the implementation complies with enterprise security requirements.
+
+Business Value:
+Reduces security risk and provides the approval evidence needed for higher-environment deployment.
+
+Scope:
+Review the complete security model established during Releases 1 and 2.
+
+Technical Requirements:
+Review should cover UAMI use, Graph permissions, Azure RBAC, Dataverse Application User role, impersonation capability, environment isolation, storage permissions, logging, outbound connectivity, and secret handling.
+
+Acceptance Criteria:
+
+Runtime authentication uses the approved User-Assigned Managed Identity.
+No client secret or password is required by the runtime solution.
+Graph permissions are documented and reviewed for least privilege.
+Azure Storage permissions for the UAMI are documented.
+Dataverse Application User privileges are documented.
+System Administrator is not used by the runtime identity unless explicitly approved as an exception.
+Dataverse impersonation capability is documented and approved.
+Application logs do not expose secrets or tokens.
+Poison queue messages do not expose secrets.
+DEV identity cannot access PROD resources.
+Environment-specific resources and identities are isolated.
+Required outbound network endpoints are documented.
+No public Graph webhook/listener is required by the target design.
+Security exceptions, if any, are documented and approved.
+Admin/support responsibilities are documented.
+InfoSec review findings are resolved or formally accepted.
+Security validation evidence is retained for UAT/production approval.
+
+Support Needed If Access Is Missing:
+This story inherently requires multiple support teams: InfoSec, Entra/Identity Admin, Azure/RBAC Admin, Power Platform/D365 Admin, and potentially Network Security. These teams may need to supply configuration evidence or perform privileged validation that should not be delegated to your personal developer account.
+
+Dependencies: US01–US24.
+
+Definition of Done:
+Security stakeholders approve the DEV solution's identity, permissions, logging, and environment-isolation model for progression toward UAT.
+
+US26 — Execute End-to-End Never-Logged-In User Test
+
+Story Points: 8
+
+Title: Execute End-to-End Automated Provisioning Acceptance Test
+
+User Story:
+As the business owner, I need to prove that an eligible user who has never logged into Dynamics can be automatically detected, provisioned, secured, and made operationally ready so that the solution satisfies the original business requirement.
+
+Business Value:
+Provides end-to-end evidence that the solution works under realistic conditions before environment promotion.
+
+Scope:
+Execute the complete workflow using a controlled DEV test user and capture acceptance evidence.
+
+Technical Requirements:
+The test user must not already exist as an interactively initialized Dynamics user in the target environment prior to the test, subject to the agreed test setup.
+
+Acceptance Criteria:
+
+An approved DEV test user is prepared.
+The test user's initial Dataverse state is documented.
+The user has not interactively logged into Dynamics before the test.
+The user is added to an approved provisioning Entra group.
+The Graph delta process detects the membership change.
+The Function processes the user on the configured schedule.
+Eligibility validation succeeds.
+Existing-user lookup correctly identifies the user's starting state.
+Missing user provisioning succeeds where applicable.
+Dataverse security-context activation succeeds.
+Correct Business Unit is confirmed.
+Correct Entra Group Team access is confirmed.
+Required effective security is confirmed.
+Required queue access is confirmed where applicable.
+An approved record-ownership/readiness scenario succeeds.
+No interactive login is required to achieve readiness.
+The complete execution is visible through correlated telemetry.
+No unrecoverable errors remain.
+Any temporary error successfully follows the retry policy.
+End-to-end execution time is captured.
+Test evidence is documented.
+Business/Application Owner confirms the expected result.
+Release 3 exit criteria are approved.
+
+Support Needed If Access Is Missing:
+Entra/Identity Admin for a controlled test user/group action if you cannot manage test membership. Power Platform/D365 Admin for System User/security diagnostics. Business Application Owner for the business-readiness test. Application Support/Monitoring for confirming telemetry and operational visibility.
+
+Dependencies: US20–US25 and all Release 2 functionality.
+
+Definition of Done:
+A newly onboarded DEV test user completes the entire automated process and can be used by the approved Dynamics business process before first interactive login.
