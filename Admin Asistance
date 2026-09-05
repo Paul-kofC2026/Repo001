@@ -1,0 +1,21 @@
+Administrative assistance required
+
+Some actions require elevated permissions that I do not need permanently assigned to my personal account. Administrator assistance is acceptable for:
+
+Entra / Identity Team: approve the required Microsoft Graph application permissions for the DEV User-Assigned Managed Identity.
+
+Power Platform Team: register the DEV managed identity as a Dataverse Application User and assist with approval/configuration of the least-privilege Dataverse security role.
+
+Azure / Infrastructure Team: provide the DEV resource group and required Azure resources/RBAC if resource creation is centrally controlled.
+
+InfoSec / Network Team: confirm outbound connectivity requirements and approve the managed-identity, zero-secret authentication model.
+
+Security scope
+
+This request is for DEV only. No production access or production credentials are requested.
+
+The implementation is intended to follow these security principles:
+
+Managed Identity → no stored application credentials → least-privilege Graph and Dataverse permissions → environment-specific resources → outbound-only integration → centralized telemetry and auditing.
+
+Once the solution is successfully built and validated in DEV, separate requests can be submitted for TEST/UAT and PROD using the approved deployment and security model.
