@@ -1,0 +1,370 @@
+Release 2 — Core Business Capability
+US11 — Validate User Provisioning Eligibility
+
+Story Points: 5
+
+Title: Validate User Eligibility for Dataverse Provisioning
+
+User Story:
+As the automated provisioning service, I need to validate whether a detected Entra user is eligible for the target Dataverse environment so that only valid users proceed into the provisioning process.
+
+Business Value:
+Prevents provisioning attempts for disabled, invalid, unlicensed, or otherwise ineligible users and reduces avoidable failures.
+
+Scope:
+Validate the candidate user against the agreed Entra and Dataverse eligibility rules before attempting any Dataverse user creation or activation.
+
+Technical Requirements:
+The service should validate at minimum the Entra user identity, enabled/disabled state, required group membership, environment security-group eligibility if applicable, and any licensing or account criteria required by the client.
+
+Acceptance Criteria:
+
+The Function receives a candidate user from the Release 1 change-detection process.
+The candidate user's Entra Object ID is available.
+The user record can be resolved in Microsoft Graph.
+The user's enabled/disabled state is evaluated.
+Required group membership is validated.
+Environment security-group eligibility is validated where applicable.
+Required licensing or approved eligibility criteria are evaluated.
+Eligible users are allowed to continue.
+Ineligible users do not proceed into Dataverse provisioning.
+The reason for rejection is logged.
+Eligibility results include the correlation ID and target user identifier.
+No sensitive user information is written unnecessarily to logs.
+A failure to evaluate eligibility is distinguishable from an ineligible-user result.
+
+Support Needed If Access Is Missing:
+Entra/Identity Admin for user, licensing, and security-group validation. Power Platform Admin for Dataverse eligibility/environment-security-group rules.
+
+Dependencies: US10.
+
+Definition of Done:
+An eligible candidate proceeds to Dataverse lookup, while an ineligible test user is safely rejected with a clear logged reason.
+
+US12 — Detect Existing Dataverse User
+
+Story Points: 3
+
+Title: Determine Whether Candidate User Already Exists in Dataverse
+
+User Story:
+As the provisioning service, I need to determine whether an eligible Entra user already exists in Dataverse so that the process is idempotent and does not attempt unnecessary duplicate provisioning.
+
+Business Value:
+Supports both new-user onboarding and reconciliation of users who already exist in Dataverse.
+
+Scope:
+Query the Dataverse System User table using the approved identity attributes and classify the result as existing, disabled, or missing.
+
+Technical Requirements:
+The preferred lookup should use the user's Entra Object ID or another approved immutable identity field where possible.
+
+Acceptance Criteria:
+
+The Function successfully authenticates to Dataverse.
+The target user is searched using an approved unique identifier.
+An existing enabled System User is correctly identified.
+An existing disabled System User is distinguishable from an enabled user.
+A missing System User is correctly identified.
+Duplicate matching records are treated as an exception rather than arbitrarily selected.
+Existing users do not trigger duplicate provisioning.
+Missing users are routed to the provisioning path.
+Existing users can continue into the security/readiness reconciliation path.
+Lookup failures are logged with correlation ID and target user identifier.
+Dataverse API errors are distinguishable from a legitimate "user not found" result.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin if the Application User lacks permission to read systemuser or required identity fields.
+
+Dependencies: US11.
+
+Definition of Done:
+The solution reliably identifies an existing, disabled, or missing Dataverse user and routes each case correctly.
+
+US13 — Provision Missing Dataverse User
+
+Story Points: 8
+
+Title: Provision Eligible Missing User into Dataverse
+
+User Story:
+As the automated provisioning service, I need to provision an eligible Entra user who does not yet exist in Dataverse so that the user is created before first interactive login.
+
+Business Value:
+This is a core business requirement: downstream processes must be able to work with the user before the user signs into Dynamics 365.
+
+Scope:
+Implement and validate the client's approved Dataverse on-demand user-provisioning mechanism.
+
+Technical Requirements:
+The exact provisioning operation must first be validated in DEV. The Function must use the UAMI-backed Dataverse Application User and approved least-privilege role.
+
+Acceptance Criteria:
+
+An eligible candidate missing from Dataverse reaches the provisioning step.
+The approved Dataverse user-provisioning operation is called successfully.
+The request uses the managed identity/Application User authentication model.
+No client secret is required.
+The target Entra identity is used correctly during provisioning.
+A System User record is created or synchronized into Dataverse.
+The created user can be queried after the provisioning operation.
+The created user's Entra identity matches the source user.
+Provisioning does not create duplicate System User records.
+An already-existing user does not enter the create path.
+Provisioning failures are logged with Dataverse error information.
+A non-retryable failure is distinguishable from a transient failure.
+The operation is safe to retry without creating duplicate users.
+Successful provisioning is logged with correlation ID and user identifier.
+The implementation is proven with a user who has never logged into the target Dynamics environment.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin to validate the supported provisioning API/action, assign required privileges, troubleshoot System User creation, and confirm tenant/environment prerequisites.
+
+Dependencies: US12.
+
+Definition of Done:
+A never-before-provisioned eligible test user is successfully created/synchronized into DEV Dataverse without logging into Dynamics first.
+
+US14 — Activate User Security Context Before First Login
+
+Story Points: 8
+
+Title: Activate and Validate Dataverse User Security Context Before First Login
+
+User Story:
+As the provisioning service, I need to execute an approved operation in the target user's context so that Dataverse evaluates the user's effective security before interactive login.
+
+Business Value:
+Ensures newly provisioned users are operationally usable by downstream Dynamics processes immediately.
+
+Scope:
+Use the approved Dataverse impersonation mechanism to execute a user-context validation operation such as WhoAmI.
+
+Technical Requirements:
+The Application User must possess the approved impersonation capability. The target user's Entra Object ID should be used through the supported Dataverse impersonation header/mechanism.
+
+Acceptance Criteria:
+
+The target System User exists before impersonation is attempted.
+The Dataverse Application User has the approved impersonation privilege.
+The Function can execute the approved user-context request.
+The request identifies the intended target user.
+The returned identity corresponds to the expected target user.
+The target user does not need to log into Dynamics first.
+A successful activation/validation result is recorded.
+An impersonation authorization failure is logged distinctly.
+A nonexistent or invalid target user is handled safely.
+No elevated personal developer credentials are used at runtime.
+The operation is executed through managed identity authentication.
+Correlation ID and target user identifier are included in telemetry.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin for impersonation privileges and security-role configuration. InfoSec may need to review/approve the impersonation capability.
+
+Dependencies: US13 for new users; existing users from US12 may also enter this path.
+
+Definition of Done:
+A provisioned user who has never logged in can successfully be evaluated in their own Dataverse security context.
+
+US15 — Validate or Align Business Unit
+
+Story Points: 5
+
+Title: Validate and Align User Business Unit
+
+User Story:
+As the provisioning service, I need to verify that a provisioned user is associated with the correct Dataverse Business Unit so that security and operational ownership behave as designed.
+
+Business Value:
+Ensures the user is placed into the correct organizational/security boundary.
+
+Scope:
+Read the user's current Business Unit and compare it with the configured target Business Unit. Update only if the approved business rules require it.
+
+Technical Requirements:
+Business Unit mapping should remain environment-configurable and should not be hard-coded.
+
+Acceptance Criteria:
+
+The current Business Unit of the target user can be retrieved.
+The configured expected Business Unit is resolved.
+A user already in the correct Business Unit is left unchanged.
+A Business Unit mismatch is detected.
+If movement is approved, the user is moved to the target Business Unit.
+If movement is not approved, the mismatch is logged for support.
+Any Business Unit update is verified after execution.
+Errors are logged with correlation ID and user identifier.
+The logic is safe for repeated execution.
+Business Unit mapping is configurable.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin for BU read/update privileges and to confirm the permitted BU movement rules.
+
+Dependencies: US14.
+
+Definition of Done:
+The user is either confirmed in the correct Business Unit or safely aligned according to the approved configuration.
+
+US16 — Validate Entra Group Team Access
+
+Story Points: 5
+
+Title: Validate Dataverse Entra Group Team Access
+
+User Story:
+As the provisioning service, I need to verify that the user's Entra membership results in the expected Dataverse Group Team access so that team-based security becomes effective before first login.
+
+Business Value:
+Confirms that the client's Entra-driven security model is functioning as designed.
+
+Scope:
+Identify the configured Dataverse Group Team for the source Entra group and validate the relationship/effective access for the provisioned user.
+
+Technical Requirements:
+Mappings between Entra group IDs and Dataverse team IDs should be configuration-driven.
+
+Acceptance Criteria:
+
+The source Entra provisioning group is known.
+The mapped Dataverse Group Team can be resolved.
+The team is confirmed to be the expected Entra-backed team type.
+The team's associated Entra group identity is validated where available.
+The provisioned user's source Entra group membership is confirmed.
+The user can be evaluated for effective access through the mapped Group Team.
+A missing Group Team mapping is logged as a configuration error.
+A missing/invalid Dataverse team is logged clearly.
+Multiple approved group mappings are supported if required.
+Validation does not manually duplicate group-team membership where Dataverse should manage it automatically.
+Results are included in the provisioning telemetry.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin for Dataverse Group Team configuration and team inspection. Entra/Identity Admin if group membership or group Object IDs cannot be validated.
+
+Dependencies: US14 and US15 where BU alignment affects the security model.
+
+Definition of Done:
+The solution confirms that the provisioned user is associated with the expected Entra-driven Dataverse Group Team security path.
+
+US17 — Validate Effective Security Roles
+
+Story Points: 5
+
+Title: Validate Effective Dataverse Security Access
+
+User Story:
+As the provisioning service, I need to verify that the user receives the expected security access through configured Dataverse Group Teams so that the user is operationally ready.
+
+Business Value:
+Prevents a situation where the System User exists but lacks the security required to perform their job.
+
+Scope:
+Validate the expected roles/access associated with the mapped Group Team configuration.
+
+Technical Requirements:
+The expected role mappings should be configurable or otherwise documented as environment configuration.
+
+Acceptance Criteria:
+
+Expected security roles for the user's provisioning path are identified.
+Roles associated with the mapped Dataverse Group Team can be read.
+The expected roles are present on the appropriate Group Team.
+Missing expected roles are detected.
+Unexpected configuration does not silently pass validation.
+The user's resulting effective security can be validated through an approved method.
+Security validation does not require assigning direct roles to the user unless explicitly part of the design.
+Results are logged with correlation ID and user identifier.
+Security-role validation is idempotent.
+A security-configuration failure prevents the process from declaring the user fully provisioned.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin for security-role inspection, Group Team role assignments, privilege-depth review, or security diagnostics.
+
+Dependencies: US16.
+
+Definition of Done:
+The required security roles/access are confirmed effective through the approved Dataverse team-based security model.
+
+US18 — Validate Queue Access
+
+Story Points: 3
+
+Title: Validate Required Dataverse Queue Access
+
+User Story:
+As the provisioning service, I need to verify any required queue access for the provisioned user so that the user is ready for operational work routing.
+
+Business Value:
+Ensures queue-dependent workloads can use the newly provisioned user immediately.
+
+Scope:
+Resolve configured queues and validate required access or membership according to public/private queue behavior.
+
+Technical Requirements:
+Queue handling should only be performed where it is part of the approved business requirement.
+
+Acceptance Criteria:
+
+Required queue configuration can be resolved.
+Queue type can be identified.
+Public queues do not receive unnecessary explicit membership operations.
+Private queue membership is validated where applicable.
+Missing private-queue membership is added only if approved by the solution design.
+Existing queue membership is not duplicated.
+Queue changes are verified after execution.
+Missing queue configuration is logged clearly.
+Queue operation failures are included in the provisioning result.
+The user cannot be marked fully ready if mandatory private queue access is missing.
+Queue logic is safe for repeat execution.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin for queue configuration, private queue membership permissions, and business-rule confirmation.
+
+Dependencies: US14; may also depend on US15–17 depending on the final design.
+
+Definition of Done:
+All mandatory queue requirements are confirmed or applied for the provisioned user.
+
+US19 — Validate Record Ownership Readiness
+
+Story Points: 5
+
+Title: Validate Newly Provisioned User as Dataverse Record Owner Before First Login
+
+User Story:
+As a downstream business process, I need a newly provisioned user to be available as a valid Dataverse record owner before their first Dynamics login so that ETL, migration, routing, and other automated processes can assign records immediately.
+
+Business Value:
+This proves the principal business requirement for the entire solution.
+
+Scope:
+Use a controlled DEV test record to verify that a newly provisioned, never-logged-in user can participate in an approved ownership/assignment scenario.
+
+Technical Requirements:
+The test must use an agreed business table/record and should not create unintended business data outside the DEV test scope.
+
+Acceptance Criteria:
+
+A test user is added to the approved Entra provisioning group.
+The user is detected by the Release 1 delta process.
+The user passes eligibility validation.
+The user exists or is successfully provisioned into Dataverse.
+The user's security context is activated/validated.
+Business Unit validation succeeds.
+Expected Group Team access is confirmed.
+Expected security access is confirmed.
+Required queue access is confirmed where applicable.
+The user has not interactively logged into Dynamics prior to the test.
+An approved DEV record can be assigned to or otherwise associated with the target user as required by the business scenario.
+The assignment succeeds without manual user login.
+The assignment is visible in Dataverse.
+A failed ownership test prevents the user from being marked fully provisioned.
+The complete test is traceable using correlation ID and user identifier.
+The result is documented as Release 2 acceptance evidence.
+
+Support Needed If Access Is Missing:
+Power Platform/D365 Admin for record assignment privileges and troubleshooting. Business Application Owner for selecting the appropriate DEV table/record and confirming the business acceptance test.
+
+Dependencies: US11–US18.
+
+Definition of Done:
+A never-before-logged-in test user can be successfully used in the approved Dataverse record-ownership scenario after automated provisioning.
