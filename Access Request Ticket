@@ -1,0 +1,49 @@
+Title: Azure DEV Access Required – Dynamics 365 Automated User Provisioning Project
+
+Request / Business Justification:
+I am implementing the Dynamics 365 Automated User Provisioning solution in the DEV environment. The solution requires an Azure Function App, User-Assigned Managed Identity, Azure Storage, Table Storage, Queue Storage, Application Insights, and related configuration in the approved CRM non-production scope.
+
+I currently have Azure portal access but do not have the required role assignments to create, configure, or manage the resources needed for the project.
+
+I am requesting the minimum scoped DEV permissions required to build and support the solution. I am not requesting Owner or broad subscription-level administrative access.
+
+Requested Scope:
+Approved CRM DEV / non-production resource group only.
+
+Requested Capabilities:
+
+Create and manage Azure Function resources
+Configure Function App settings
+Deploy Function code
+Create and manage a User-Assigned Managed Identity
+Attach the UAMI to the DEV Function App
+Create and manage a Storage Account
+Create/manage Azure Table Storage
+Create/manage Azure Queue Storage
+Create/connect/manage Application Insights
+Read Log Analytics data and configure integration if required
+View resource networking and configuration
+Read existing Azure RBAC assignments
+Manage project resources within the approved DEV resource group
+
+For RBAC role assignment, I would word it separately:
+
+If security policy does not allow me to assign Azure RBAC permissions, please retain that capability with the Azure/RBAC administration team and provide administrative support to assign the required Storage data roles to the provisioning Managed Identity when requested.
+
+That is safer than asking for Owner or User Access Administrator.
+
+For the project UAMI, we will eventually need Azure admins to ensure it can receive the necessary data-plane permissions, such as access to the Graph delta Table and poison Queue.
+
+I would also add this sentence:
+
+Where an existing approved Function App, Storage Account, Application Insights resource, or other shared DEV resource is already available, please grant the minimum access necessary for me to configure and use that existing resource rather than creating duplicate infrastructure.
+
+That aligns well with your plan to reuse an existing Function App.
+
+If your ticket system has an Access / Role Requested field, I would initially request:
+
+Scoped Contributor-level access to the approved CRM DEV resource group, subject to the client's custom RBAC model.
+
+If their organization does not use standard Contributor, ask them to assign the approved CRM Developer custom role that provides equivalent create/configure/deploy capabilities.
+
+Do not request subscription Owner, Global Administrator, or broad production access for this phase.
