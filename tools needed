@@ -27,71 +27,8 @@ PS C:\Users\paneng> mkdir C:\Projects\D365UserProvisioning
 >> code .
 
 
-    Directory: C:\Projects
-
-
-Mode                 LastWriteTime         Length Name                                                       
-----                 -------------         ------ ----                                                       
-d-----         9/14/2026  12:16 AM                D365UserProvisioning                                       
-dotnet : The term 'dotnet' is not recognized as the name of a cmdlet, function, script file, or operable 
-program. Check the spelling of the name, or if a path was included, verify that the path is correct and try 
-again.
-At line:4 char:1
-+ dotnet new console --framework net8.0
-+ ~~~~~~
-    + CategoryInfo          : ObjectNotFound: (dotnet:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
- 
-
-
-PS C:\Projects\D365UserProvisioning> dotnet add package Microsoft.Azure.Functions.Worker
-dotnet : The term 'dotnet' is not recognized as the name of a cmdlet, function, script file, or operable 
-program. Check the spelling of the name, or if a path was included, verify that the path is correct and try 
-again.
-At line:1 char:1
-+ dotnet add package Microsoft.Azure.Functions.Worker
-+ ~~~~~~
-    + CategoryInfo          : ObjectNotFound: (dotnet:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
- 
-PS C:\Projects\D365UserProvisioning> dotnet add package Microsoft.Azure.Functions.Worker.Sdk
-dotnet : The term 'dotnet' is not recognized as the name of a cmdlet, function, script file, or operable 
-program. Check the spelling of the name, or if a path was included, verify that the path is correct and try 
-again.
-At line:1 char:1
-+ dotnet add package Microsoft.Azure.Functions.Worker.Sdk
-+ ~~~~~~
-    + CategoryInfo          : ObjectNotFound: (dotnet:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
- 
-PS C:\Projects\D365UserProvisioning> dotnet add package Microsoft.Azure.Functions.Worker.Extensions.Timer
-dotnet : The term 'dotnet' is not recognized as the name of a cmdlet, function, script file, or operable 
-program. Check the spelling of the name, or if a path was included, verify that the path is correct and try 
-again.
-At line:1 char:1
-+ dotnet add package Microsoft.Azure.Functions.Worker.Extensions.Timer
-+ ~~~~~~
-    + CategoryInfo          : ObjectNotFound: (dotnet:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
- 
-PS C:\Projects\D365UserProvisioning> dotnet add package Microsoft.ApplicationInsights.WorkerService
-dotnet : The term 'dotnet' is not recognized as the name of a cmdlet, function, script file, or operable 
-program. Check the spelling of the name, or if a path was included, verify that the path is correct and try 
-again.
-At line:1 char:1
-+ dotnet add package Microsoft.ApplicationInsights.WorkerService
-+ ~~~~~~
-    + CategoryInfo          : ObjectNotFound: (dotnet:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
- 
-PS C:\Projects\D365UserProvisioning> dotnet add package Microsoft.Azure.Functions.Worker.ApplicationInsights
-dotnet : The term 'dotnet' is not recognized as the name of a cmdlet, function, script file, or operable 
-program. Check the spelling of the name, or if a path was included, verify that the path is correct and try 
-again.
-At line:1 char:1
-+ dotnet add package Microsoft.Azure.Functions.Worker.ApplicationInsigh ...
-+ ~~~~~~
-    + CategoryInfo          : ObjectNotFound: (dotnet:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
- 
-PS C:\Projects\D365UserProvisioning> 
+$installer = "$env:TEMP\dotnet-sdk-8.exe"
+Invoke-WebRequest `
+  -Uri "https://download.visualstudio.microsoft.com/download/pr/6ba61a74-9a3c-4fdc-a2b5-0f61c828df00/ebd35c28ecf6ce2d23db9fb4a7b6534a/dotnet-sdk-8.0.101-win-x64.exe" `
+  -OutFile $installer
+Start-Process $installer -Wait
