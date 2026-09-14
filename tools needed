@@ -9,3 +9,13 @@
 | Git                               | `winget install Git.Git`                                         |
 | Azure CLI                         | `winget install Microsoft.AzureCLI`                              |
 | Power Platform CLI                | `dotnet tool install --global Microsoft.PowerApps.CLI.Tool`      |
+
+
+
+
+
+mkdir C:\Projects\D365UserProvisioning
+cd C:\Projects\D365UserProvisioning
+
+dotnet new console --framework net8.0
+code .
