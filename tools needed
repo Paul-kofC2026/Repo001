@@ -14,8 +14,8 @@
 
 
 
-mkdir C:\Projects\D365UserProvisioning
-cd C:\Projects\D365UserProvisioning
-
-dotnet new console --framework net8.0
-code .
+dotnet add package Microsoft.Azure.Functions.Worker
+dotnet add package Microsoft.Azure.Functions.Worker.Sdk
+dotnet add package Microsoft.Azure.Functions.Worker.Extensions.Timer
+dotnet add package Microsoft.ApplicationInsights.WorkerService
+dotnet add package Microsoft.Azure.Functions.Worker.ApplicationInsights
