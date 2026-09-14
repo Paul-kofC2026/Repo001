@@ -1,0 +1,11 @@
+| Tool                              | PowerShell command                                               |
+| --------------------------------- | ---------------------------------------------------------------- |
+| Node.js LTS                       | `winget install OpenJS.NodeJS.LTS`                               |
+| Azure Functions Core Tools v4     | `npm install -g azure-functions-core-tools@4 --unsafe-perm true` |
+| Azure Functions VS Code Extension | `code --install-extension ms-azuretools.vscode-azurefunctions`   |
+| C# Dev Kit                        | `code --install-extension ms-dotnettools.csdevkit`               |
+| C# Extension                      | `code --install-extension ms-dotnettools.csharp`                 |
+| Azurite VS Code Extension         | `code --install-extension Azurite.azurite`                       |
+| Git                               | `winget install Git.Git`                                         |
+| Azure CLI                         | `winget install Microsoft.AzureCLI`                              |
+| Power Platform CLI                | `dotnet tool install --global Microsoft.PowerApps.CLI.Tool`      |
