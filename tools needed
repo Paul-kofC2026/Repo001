@@ -27,8 +27,39 @@ PS C:\Users\paneng> mkdir C:\Projects\D365UserProvisioning
 >> code .
 
 
-$installer = "$env:TEMP\dotnet-sdk-8.exe"
-Invoke-WebRequest `
-  -Uri "https://download.visualstudio.microsoft.com/download/pr/6ba61a74-9a3c-4fdc-a2b5-0f61c828df00/ebd35c28ecf6ce2d23db9fb4a7b6534a/dotnet-sdk-8.0.101-win-x64.exe" `
-  -OutFile $installer
-Start-Process $installer -Wait
+Title: Development Tools Installation Request – Dynamics 365 / Azure Functions Project
+
+Business Justification:
+I am developing a Dynamics 365 automated user-provisioning solution that uses a C# .NET 8 isolated Azure Function, Microsoft Graph, Azure Storage, Managed Identity, and Dataverse.
+
+The client workstation currently has Visual Studio Code installed, but the additional development tools below are required to build, run, debug, test, and manage the solution locally. Attempts to install the required .NET SDK through standard command-line methods were unsuccessful, so IT assistance is required.
+
+Software Requested:
+
+Software	Version	Purpose
+Microsoft .NET SDK	.NET 8 SDK x64	Build and compile the C# .NET 8 isolated Azure Function
+Azure Functions Core Tools	v4	Run and debug Azure Functions locally
+Git for Windows	Current approved version	Source control, branching, commits, and CI/CD development
+Node.js	Current approved LTS version	Required for supported development tooling and npm-based packages where applicable
+Azure CLI	Current approved version	Azure authentication, resource configuration, deployment, and troubleshooting
+Azurite	Current approved version	Local Azure Storage emulation for Table and Queue development/testing
+
+VS Code Extensions Required/Already Installed as Applicable:
+Azure Functions (ms-azuretools.vscode-azurefunctions), C# Dev Kit (ms-dotnettools.csdevkit), C# (ms-dotnettools.csharp), and Azurite (Azurite.azurite).
+
+Technical Requirement:
+The workstation must be able to execute the following commands after installation:
+
+dotnet --version
+func --version
+git --version
+node --version
+npm --version
+az --version
+
+The key requirements are .NET 8 SDK (not runtime only) and Azure Functions Core Tools v4, as these are required to build and locally execute the Azure Functions solution.
+
+Requested Action:
+Please install or make the listed development tools available through the organization's approved software distribution mechanism. If any of these tools require a separate security approval, please route the request to the appropriate team.
+
+Environment: Development workstation / Dynamics 365 automated user-provisioning project.
