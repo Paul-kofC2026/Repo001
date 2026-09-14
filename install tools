@@ -1,0 +1,11 @@
+winget install Microsoft.DotNet.SDK.8
+winget install Microsoft.VisualStudioCode
+
+Install Node.js, which gives you npm:
+winget install OpenJS.NodeJS.LTS
+
+Then install Azure Functions Core Tools:
+npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+Install the Azure Functions extension in VS Code:
+code --install-extension ms-azuretools.vscode-azurefunctions
