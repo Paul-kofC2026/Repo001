@@ -1,5 +1,20 @@
-Unable to load Analyzer assembly C:\Users\paneng\.nuget\packages\system.clientmodel\1.10.0\analyzers\dotnet\cs\System.ClientModel.SourceGeneration.dll : System.InvalidOperationException: Unable to load System.ClientModel.SourceGeneration: Could not load file or assembly 'C:\Users\paneng\.nuget\packages\system.clientmodel\1.10.0\analyzers\dotnet\cs\System.ClientModel.SourceGeneration.dll'. Access is denied.
-Unable to load Analyzer assembly C:\Users\paneng\.nuget\packages\microsoft.azure.functions.worker.extensions.http.aspnetcore.analyzers\1.0.4\analyzers\dotnet\cs\Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore.Analyzers.dll : System.InvalidOperationException: Unable to load Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore.Analyzers: Could not load file or assembly 'Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore.Analyzers, Version=1.0.4.0, Culture=neutral, PublicKeyToken=551316b6919f366c'. Access is denied.
-Unable to load Analyzer assembly C:\Users\paneng\.nuget\packages\microsoft.azure.functions.worker.sdk.analyzers\1.2.2\analyzers\dotnet\cs\Microsoft.Azure.Functions.Worker.Sdk.Analyzers.dll : System.InvalidOperationException: Unable to load Microsoft.Azure.Functions.Worker.Sdk.Analyzers: Could not load file or assembly 'Microsoft.Azure.Functions.Worker.Sdk.Analyzers, Version=1.2.2.0, Culture=neutral, PublicKeyToken=551316b6919f366c'. Access is denied.
-Unable to load Analyzer assembly C:\Users\paneng\.nuget\packages\microsoft.azure.functions.worker.sdk.generators\1.3.6\analyzers\dotnet\cs\Microsoft.Azure.Functions.Worker.Sdk.Generators.dll : System.InvalidOperationException: Unable to load Microsoft.Azure.Functions.Worker.Sdk.Generators: Could not load file or assembly 'Microsoft.Azure.Functions.Worker.Sdk.Generators, Version=1.3.6.0, Culture=neutral, PublicKeyToken=551316b6919f366c'. Access is denied.
-Unable to load Analyzer assembly C:\Users\paneng\.nuget\packages\system.clientmodel\1.10.0\analyzers\dotnet\cs\System.ClientModel.SourceGeneration.dll : System.InvalidOperationException: Unable to load System.ClientModel.SourceGeneration: Could not load file or assembly 'System.ClientModel.SourceGeneration, Version=1.0.0.0, Culture=neutral, PublicKeyToken=92742159e12e44c8'. Access is denied.
+Subject: Developer Workstation Permission Issue – Visual Studio Unable to Load NuGet Assemblies
+
+I am developing a .NET 8 isolated Azure Functions solution using Visual Studio Community 2026.
+
+The Azure Functions project and required NuGet packages are being created/restored; however, Visual Studio/MSBuild is unable to load required analyzer and source-generator assemblies from my local NuGet package cache.
+
+The assemblies are located under:
+
+C:\Users\paneng\.nuget\packages\
+
+Multiple Microsoft/.NET assemblies are failing with “Access is denied”, including:
+
+Microsoft.Azure.Functions.Worker.Sdk.Analyzers.dll
+Microsoft.Azure.Functions.Worker.Sdk.Generators.dll
+Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore.Analyzers.dll
+System.ClientModel.SourceGeneration.dll
+
+Requested action: Please verify whether endpoint security, application control, folder permissions, or another workstation security policy is preventing Visual Studio/MSBuild/Roslyn from loading DLLs from the user's NuGet package directory. Please provide the required approved permissions/policy exception for .NET/Azure Functions development.
+
+This issue is currently preventing the Azure Functions project from compiling.
