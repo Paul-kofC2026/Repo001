@@ -1,0 +1,5 @@
+The one that can actually fail your import: there are two Medium meta-include-missingunmanageddependencies findings. 
+The solution KofC Core Webresources depends on two unmanaged components from the Active solution: kofc_dateofbirth ("Date of Birth") and kofc_gender ("z_(Do Not Use)Gender"). 
+If those don't already exist in the target environment, the import will fail. You can fix this in one of two ways. You can add those columns to the solution or to a solution deployed before it. 
+Or you can find which web resource or form references them and remove the reference. 
+The kofc_gender column is marked "Do Not Use," so removing that reference is probably the right call there.
