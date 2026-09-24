@@ -1,0 +1,284 @@
+/*
+Author: Suyash Gupta
+US: 17322
+Date: 10-04-2024
+*/
+var executionContext;
+
+var Messages={
+	Resource: "kofc_/resx/messages",
+	TenDigitNumericValueKey: "General.TenDigitNumericValue"
+};
+//OptionSet Values for Lead Type
+var optionSetValues = {
+    Insurance: 258510000,
+    Fraternal: 258510001,
+    Charity: 258510002,
+    RetailInvestment: 258510003,
+    InstitutionalInvestment: 258510004,
+    KCCF: 258510005,
+    Recruiting: 258510006
+};
+
+function onLoadMobile(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();   
+		formContext.ui.process.setVisible(false);
+		FilterLeadSubTypeMobile(executionContext);
+		if (formContext.getAttribute("kofc_leadtype").getValue() !== null && formContext.getAttribute("kofc_leadtype").getValue() !== undefined) {
+        formContext.getControl("kofc_leadtype").setDisabled(true);
+    }
+        }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('Error in Mobile onLoad: ' + (error.description || error.message));
+    }
+}
+
+//Function to hide qualify button on mobile app
+function HideQualifyButton() {
+   "use strict";
+    var globalContext = Xrm.Utility.getGlobalContext();
+	
+	return new Promise(function (resolve, reject) {
+	globalContext.getCurrentAppName().then(
+	 function(appName){ 
+		if(appName==="Mobile One Member App"){
+			resolve(false);
+		}
+		else{
+			resolve(true);
+		}
+	 }, 
+	 function(err){
+		 reject('err ' + err.message);
+	 }
+	);
+	});
+}
+
+//Function to Filter Lead Subtype Based on Lead Type
+function FilterLeadSubTypeMobile(executionContext) {
+    "use strict";
+    try {
+		
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("kofc_leadtype").getValue() !== null) {
+			if(formContext.ui.getFormType()===1 && formContext.getAttribute("kofc_leadsubtype").getValue()!==null)
+			{
+				formContext.getAttribute("kofc_leadsubtype").setValue(null);
+			}
+            var leadType = formContext.getAttribute("kofc_leadtype").getValue();
+            //Apply Search on lookup field OnClick 
+            formContext.getControl("kofc_leadsubtype").addPreSearch(function () {
+                var leadType = formContext.getAttribute("kofc_leadtype").getValue();
+                //Apply the filter condition
+                var filter = "<filter type='and'><condition attribute='kofc_leadtype' operator='eq' value='" + leadType + "' /></filter>";
+                //Populate the filter values into lookup field
+                formContext.getControl("kofc_leadsubtype").addCustomFilter(filter);
+            });
+        }
+    }
+    catch (error) {
+        DisplayAlertMessage("ERROR", "Error At function FilterLeadSubTypeMobile" + (error.description || error.message));
+    }
+
+}
+
+//Function to Set Lead Type Disabled for recruiting.
+function MakeLeadTypeDisabled(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("kofc_leadtype").getValue() !== null && formContext.getAttribute("kofc_leadtype").getValue() !== undefined) {
+            var leadType = formContext.getAttribute("kofc_leadtype").getValue();
+            if (leadType === optionSetValues.Recruiting) {
+                formContext.getControl("kofc_leadtype").setDisabled(true);
+            }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function MakeLeadTypeDisabled: " + (error.description || error.message));
+    }
+}
+
+function OnChangePhoneNumber(executionContext, attributeSchema) {
+    "use strict";
+    try {
+		
+        var formContext = executionContext.getFormContext();
+        var phoneNumberPattern = /^\(\d{3}\) \d{3}-\d{4}$/;
+        var phone = formContext.getAttribute(attributeSchema).getValue(); //get Phone value
+        formContext.getControl(attributeSchema).clearNotification("PhoneError");
+        if (phone !== null && !phoneNumberPattern.test(phone)) {
+            if (phone !== null && (phone.length < 10 || phone.length > 10 || isNaN(phone))) {
+				var tenDigitNumericValueKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.TenDigitNumericValueKey);
+                formContext.getControl(attributeSchema).setNotification(tenDigitNumericValueKeyMessage, "PhoneError");            
+            }
+            else {
+                formContext.getControl(attributeSchema).clearNotification("PhoneError");
+                formContext.getAttribute(attributeSchema).setValue("(" + phone.substr(0, 3) + ") " + phone.substr(3, 3) + "-" + phone.substr(6, phone.length));
+            }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function OnChangePhoneNumber" + (error.description || error.message));
+    }
+}
+
+//*************** Common Functions *********
+// Common Alert Function
+function DisplayAlertMessage(customTitle, customMessage) {
+    "use strict";
+    try {
+        var alertStrings = { confirmButtonLabel: "OK", title: customTitle, text: customMessage, };
+        var alertOptions = { height: 120, width: 260 };
+        Xrm.Navigation.openAlertDialog(alertStrings, alertOptions).then(function (success) { }, function (error) { });
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('DisplayAlertMessage Error: ' + (error.description || error.message));
+    }
+}
+
+//Function will be called on change of parentcontactid(Contact) field.
+function ClearLeadFields(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        formContext.ui.clearFormNotification("ErrorMessage");
+		 if (formContext.getAttribute("parentcontactid").getValue() === null || formContext.getAttribute("parentcontactid").getValue() === undefined) {
+			formContext.getAttribute("firstname").setValue(null);
+			formContext.getAttribute("lastname").setValue(null);
+			formContext.getAttribute("telephone1").setValue(null);
+			formContext.getAttribute("telephone2").setValue(null);
+			formContext.getAttribute("mobilephone").setValue(null);
+			formContext.getAttribute("emailaddress1").setValue(null);
+		 }
+    }
+    catch (error) {
+        DisplayAlertMessage("ERROR", "Error At function ClearLeadFields(LeadMobile.js)" + (error.description || error.message));
+    }
+}
+
+//On Change Contact Set fields on lead from contact.
+function OnChangeContactLookup(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("parentcontactid").getValue() !== null && formContext.getAttribute("parentcontactid").getValue() !== undefined) {
+            var contact = formContext.getAttribute("parentcontactid").getValue();
+            var contactId = contact[0].id.replace('{', '').replace('}', '');
+            var req = new XMLHttpRequest();
+            var globalContext = Xrm.Utility.getGlobalContext();
+            req.open("GET", globalContext.getClientUrl() + "/api/data/v9.2/contacts(" + contactId + ")?$select=firstname,lastname,telephone1,telephone2,mobilephone,emailaddress1", true);
+            req.setRequestHeader("OData-MaxVersion", "4.0");
+            req.setRequestHeader("OData-Version", "4.0");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            req.onreadystatechange = function () {
+                if (this.readyState === 4) {
+                    req.onreadystatechange = null;
+                    if (this.status === 200) {
+                        var result = JSON.parse(this.response);
+                        var contactFirstName = result["firstname"];
+                        var contactLastName = result["lastname"];
+                        if (contactFirstName !== null) {
+                            formContext.getAttribute("firstname").setValue(contactFirstName);
+                        }
+						else {
+							formContext.getAttribute("firstname").setValue(null);
+						}
+						if(contactLastName !== null)
+						{
+							formContext.getAttribute("lastname").setValue(contactLastName);
+						}
+						else {
+							formContext.getAttribute("lastname").setValue(null);
+						}
+						if(result["telephone1"] !== null)
+						{
+							formContext.getAttribute("telephone1").setValue(result.telephone1);
+						}
+						else {
+							formContext.getAttribute("telephone1").setValue(null);
+						}
+						if(result["telephone2"] !== null)
+						{
+							formContext.getAttribute("telephone2").setValue(result.telephone2);
+						}
+						else {
+							formContext.getAttribute("telephone2").setValue(null);
+						}
+						if(result["mobilephone"] !== null)
+						{
+							formContext.getAttribute("mobilephone").setValue(result.mobilephone);
+						}
+						else {
+							formContext.getAttribute("mobilephone").setValue(null);
+						}
+						if(result["emailaddress1"] !== null)
+						{
+							formContext.getAttribute("emailaddress1").setValue(result.emailaddress1);
+						}
+						else {
+							formContext.getAttribute("emailaddress1").setValue(null);
+						}
+						formContext.data.save();
+                    } else {
+                        DisplayAlertMessage("ERROR", "Error At function OnChangeContactLookup(LeadMobile.js)" + (error.description || error.message));
+                    }
+                }
+            };
+            req.send();
+        }
+		else{
+			ClearLeadFields(executionContext);
+		}
+    }
+    catch (error) {
+        DisplayAlertMessage("ERROR", "Error At function OnChangeContactLookup(LeadMobile.js)" + (error.description || error.message));
+    }
+}
+
+
+function setLeadTypeForOnPageLoadForRoles(executionContext)
+{
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    if(formContext !== "undefined" && formContext !== null)
+    {
+
+    var userRoles = Xrm.Utility.getGlobalContext().userSettings.roles;
+   
+    if (userRoles !== null && userRoles !== undefined) {
+        userRoles.forEach(function (item) {
+            if (item.name.toLowerCase() === "insurance leader" || item.name.toLowerCase() === "insurance sales" || item.name.toLowerCase() === "agency support") {
+                formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.Insurance);
+				return ;
+            }
+            else if (item.name.toLowerCase() === "fraternal manager" ) {
+                formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.Fraternal);
+				return ;
+            }
+            else if (item.name.toLowerCase() === "charity leader" || item.name.toLowerCase() === "charity user") {
+                formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.Charity);
+				return ;
+            }//changed 2.0
+            else if (item.name.toLowerCase() === "investment manager" || item.name.toLowerCase() === "investment support" || item.name.toLowerCase() === "investment leaderâ€‹â€‹") {
+                formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.InstitutionalInvestment);
+				return ;
+            }
+            else if (item.name.toLowerCase() === "retail investment sales" ) {
+                formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.RetailInvestment);
+				return ;
+            }
+            else if (item.name.toLowerCase() === "kccf leader"|| item.name.toLowerCase() === "kccf user" ) {
+                formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.KCCF);
+				return ;
+            }
+           
+        });
+    }
+}
+}
