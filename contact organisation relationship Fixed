@@ -1,0 +1,212 @@
+// JavaScript source code
+
+var Messages={
+	Resource: "kofc_/resx/messages",
+	CreateRelationshipKey: "ContactOrganizationRelationship.CreateRelationship",
+	ErrorKey:"General.Error"
+};
+
+//Added option set values for Organisation Type 
+var organisationType = {
+    Circle: 258510003,
+    RoundTable: 258510011
+};
+
+function OnLoad(executionContext) {
+	 "use strict";
+    FilterOrganizationRoles(executionContext);
+}
+
+//Function to Filter Lead Subtype Based on Lead Type
+function FilterOrganizationRoles(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("kofc_organizationtype").getValue() !== null) {
+            var organizationType = formContext.getAttribute("kofc_organizationtype").getValue();
+            //Apply Search on lookup field OnClick 
+            formContext.getControl("kofc_organizationroles").addPreSearch(function () {
+                var organizationType = formContext.getAttribute("kofc_organizationtype").getValue();
+                //Apply the filter condition
+                var filter = "<filter type='and'><condition attribute='kofc_organizationtype' operator='eq' value='" + organizationType + "' /></filter>";
+                //Populate the filter values into lookup field
+                formContext.getControl("kofc_organizationroles").addCustomFilter(filter);
+            });
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("ERROR", "Error At function FilterOrganizationRoles" + (error.description || error.message));
+    }
+
+}
+
+
+
+//Author: Harshada Pimple
+//Created On: 13th Dec 2023
+//US: 7751
+//Description: Added OnSave Event handler
+
+
+
+//Author :Harshada Pimple
+//Created On:13th Dec 2023
+//US: 7751
+//Description:Function to restrict creation of Contact-Organisation Relationship when Organisation has Organisation Type other than Council or Round Table.
+function RestrictContactOrganisationCreate(executionContext)
+{
+	"use strict";
+    var formContext = executionContext.getFormContext();
+	var eventArguments = executionContext.getEventArgs();
+    try {
+	var hasRole = CheckInsuranceRoles();
+	if(hasRole)
+	{
+	if (formContext.getAttribute("kofc_organization").getValue() !== null && formContext.getAttribute("kofc_organization").getValue() !== undefined)
+	{
+	var organisation = formContext.getAttribute("kofc_organization").getValue();
+	var orgID = organisation[0].id.replace('{', '').replace('}', '');
+	return new Promise(function (resolve) {
+	 var req = new XMLHttpRequest();
+	req.open("GET", Xrm.Utility.getGlobalContext().getClientUrl() + "/api/data/v9.2/kofc_organizations(" + orgID + ")?$select=kofc_organizationtype", true);
+	req.setRequestHeader("OData-MaxVersion", "4.0");
+	req.setRequestHeader("OData-Version", "4.0");
+	req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+	req.setRequestHeader("Accept", "application/json");
+	req.setRequestHeader("Prefer", "odata.include-annotations=*");
+	req.onreadystatechange = function () {
+	if (this.readyState === 4) {
+		req.onreadystatechange = null;
+		if (this.status === 200) {
+			var result = JSON.parse(this.response);	
+			var kofc_organizationid = result["kofc_organizationid"]; // Guid
+			var kofc_organizationtype = result["kofc_organizationtype"]; // Choice
+			var kofc_organizationtype_formatted = result["kofc_organizationtype@OData.Community.Display.V1.FormattedValue"];
+			if(kofc_organizationtype !== null && kofc_organizationtype !== undefined)
+			{
+			if(kofc_organizationtype === organisationType.Circle || kofc_organizationtype === organisationType.RoundTable)
+			{
+                      // Do nothing allow to create contact org relationship record
+			}
+			else
+			{
+				  eventArguments.preventDefault();
+							var createRelationshipKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.CreateRelationshipKey);
+var errorKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.ErrorKey);
+							var alertStrings = {
+							confirmButtonLabel: "OK",
+							text: createRelationshipKeyMessage + " - " + kofc_organizationtype_formatted+"",//"You cannot create relationship for organization type - "
+							title: errorKeyMessage
+						};
+						var alertOptions = {
+							height: 120,
+							width: 260
+						};
+						Xrm.Navigation.openAlertDialog(alertStrings, alertOptions).then(
+
+							function(success) {},
+
+							function(error) {});
+			}
+			}
+		} else {
+			//console.log(this.responseText);
+		}
+		resolve();
+	}
+};
+req.send();
+	});
+	}
+}
+	}
+
+
+catch (error) {
+        var alertStrings = {
+            confirmButtonLabel: "OK",
+            text: "Error At function RestrictContactOrganisationCreate(kofc_Contact Organization Relationship.js)" + error.message,
+            title: "ERROR"
+        };
+        var alertOptions = {
+            height: 120,
+            width: 260
+        };
+        Xrm.Navigation.openAlertDialog(alertStrings, alertOptions).then(
+            function (success) { },
+            function (error) { });
+    }
+}
+
+
+//Author:Harshada Pimple
+//Created On: 3rd April 2024
+//US:7751
+//Function to check roles if matched then the restriction should be shown for contact-org relationship creation.
+
+function CheckInsuranceRoles() {
+    "use strict";
+    var roles = Xrm.Utility.getGlobalContext().userSettings.roles;
+    var hasRole = false;
+    if (roles !== null && roles !== undefined) {
+        roles.forEach(function (item) {
+            if (item.name.toLowerCase() === "agency support" || item.name.toLowerCase() === "home office" || item.name.toLowerCase() === "insurance leader" || item.name.toLowerCase() === "insurance sales" ) {
+                hasRole = true;
+                return hasRole;
+            }
+        });
+    }
+    return hasRole;
+}
+
+
+
+//Author:Surbhi Garg
+//Created On: 18th June 2024
+//Bug:21415
+//Function to map organization type from organization entity on change of organization lookup on Contact organization Relationship entity
+
+function MapOrgTypeOfOrgChange(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    var eventArguments = executionContext.getEventArgs();
+    try {
+        if (formContext.getAttribute("kofc_organization").getValue() !== null && formContext.getAttribute("kofc_organization").getValue() !== undefined) {
+            var organisation = formContext.getAttribute("kofc_organization").getValue();
+            var orgID = organisation[0].id.replace('{', '').replace('}', '');
+            var req = new XMLHttpRequest();
+            req.open("GET", Xrm.Utility.getGlobalContext().getClientUrl() + "/api/data/v9.2/kofc_organizations(" + orgID + ")?$select=kofc_organizationtype", true);
+            req.setRequestHeader("OData-MaxVersion", "4.0");
+            req.setRequestHeader("OData-Version", "4.0");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            req.onreadystatechange = function () {
+                if (this.readyState === 4) {
+                    req.onreadystatechange = null;
+                    if (this.status === 200) {
+                        var result = JSON.parse(this.response);
+                        var kofc_organizationid = result["kofc_organizationid"]; // Guid
+                        var kofc_organizationtype = result["kofc_organizationtype"]; // Choice
+                        var kofc_organizationtype_formatted = result["kofc_organizationtype@OData.Community.Display.V1.FormattedValue"];
+                        if (kofc_organizationtype !== null && kofc_organizationtype !== undefined) {
+                            formContext.getAttribute('kofc_organizationtype').setValue(kofc_organizationtype);
+                            FilterOrganizationRoles(executionContext);
+                        }
+                        else {
+                            formContext.getAttribute('kofc_organizationtype').setValue(null);
+                        }
+                    } else {
+
+                    }
+                }
+            };
+            req.send();
+        }
+    }
+
+
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("ERROR", "Error At function MapOrgTypeOfOrgChange" + (error.description || error.message));
+    }
+}
