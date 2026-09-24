@@ -469,15 +469,3 @@ function getCustomerServiceQueueRecord(formContext) {
     }
 }
 
-////////////////////////////////////////////
-
-
-
-Line	Function	Author	Rule	Severity	Change	Why it's needed
-24	GetCaseRecordInfo	Not stated*	web-use-async	Critical	Switched from a synchronous XMLHttpRequest to Xrm.WebApi.retrieveRecord, which returns a promise. The query and $select are unchanged.	A synchronous request blocks the browser's UI thread until the server responds, so the form freezes. Browsers have deprecated synchronous XHR on the main thread, and Microsoft requires async calls in Dataverse client scripts.
-369	OnSaveTask	Bheemesh (US 19087)	web-use-async	Critical	The CloseIncident POST is now asynchronous (true with onreadystatechange). Headers, body, and success/error handling are unchanged.	Same problem as line 24. It is worse here because it runs during save, so the user is stuck while the case closes. On slow connections this can also cause save timeouts.
-376	OnSaveTask	Bheemesh (US 19087)	web-use-navigation-api	Medium	Replaced Xrm.Utility.openEntityForm with Xrm.Navigation.openForm.	openEntityForm is deprecated in the client API and may be removed. openForm is the supported replacement in Unified Interface and mobile.
-399	GetQueueIDForCustomerServiceQueue	Not stated	web-remove-console	Medium	Removed console.log(results).	Debug output shouldn't ship to production. This line wrote full query results to the browser console, where anyone with dev tools could see them.
-415	GetQueueIDForCustomerServiceQueue	Not stated	web-remove-console	Medium	Removed console.log(error.Message). The handler is now empty, with a comment.	Same reason as line 399. The line also logged error.Message, which is undefined because the property is message, so it never logged anything useful.
-426	getCustomerServiceQueueRecord	Not stated	web-use-strict-mode	Medium	Added "use strict".	Strict mode turns silent mistakes, such as assigning to undeclared variables, into errors. This makes bugs visible, and every other function in the file already uses it.
-459	getCustomerServiceQueueRecord	Not stated	web-remove-console	Medium	Removed console.log from the catch block. The catch is now empty, with a comment.	Same reason as line 399.
