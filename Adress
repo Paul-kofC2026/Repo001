@@ -1,0 +1,469 @@
+/*
+Author: Dipti Mishra 
+#US - 21765
+created OnLoad, SetReasonCode, CheckFieldAgent
+Date: 27/06/2024
+*/
+var AddressTypeOptionCache = {
+	initialized: false,
+	optionsByValue: {}
+};
+
+function OnLoad(executionContext)
+{
+	"use strict";
+	try
+	{
+		// updateFormName(executionContext);
+		var formContext = executionContext.getFormContext(); 
+		filterAddressTypeForInvestor(executionContext);
+		lockUnlockAddressType(executionContext);
+		if (formContext.getAttribute('kofc_addresschangestatuscode') !== null)
+		{
+			if (formContext.getAttribute("addresstypecode") !== null) formContext.getAttribute("addresstypecode").addOnChange(SetReasonCode);
+			if (formContext.getAttribute("line1") !== null) formContext.getAttribute("line1").addOnChange(SetReasonCode);
+			if (formContext.getAttribute("line2") !== null) formContext.getAttribute("line2").addOnChange(SetReasonCode);
+			if (formContext.getAttribute("line3") !== null) formContext.getAttribute("line3").addOnChange(SetReasonCode);
+			if (formContext.getAttribute("city") !== null) formContext.getAttribute("city").addOnChange(SetReasonCode);
+			if (formContext.getAttribute("kofc_address2_country") !== null) formContext.getAttribute("kofc_address2_country").addOnChange(SetReasonCode);
+			if (formContext.getAttribute("postalcode") !== null) formContext.getAttribute("postalcode").addOnChange(SetReasonCode);
+			if (formContext.getAttribute("kofc_address2_stateorprovince") !== null) formContext.getAttribute("kofc_address2_stateorprovince").addOnChange(SetReasonCode);
+			if (formContext.getAttribute('kofc_addresschangestatuscode').getValue() !== null) formContext.getAttribute('kofc_addresschangestatuscode').setRequiredLevel("required");
+			if (formContext.ui.getFormType() === 1) formContext.getAttribute('kofc_addresschangestatuscode').setRequiredLevel("none");
+			sessionStorage.removeItem("errorNotificationShown");
+		}
+		if (formContext.getAttribute("parentid"))
+		{
+			formContext.getAttribute("parentid").addOnChange(function ()
+			{
+				filterAddressTypeForInvestor(executionContext);
+			});
+		}
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error in OnLoad: ' + (error.description || error.message));
+	}
+}
+
+function onSave(executionContext)
+{
+	"use strict";
+	checkDuplicateAddressType(executionContext);
+};
+/*
+Author: Veera Kolan
+#US - 36836 -Add New Address Types of ‘Retail Investment’ and 'Institutional Investment' to Address Type Optionset - CRM
+Updated Date: 10/02/2025
+*/
+//Function to set Reason Code mandatory based on Role of User
+
+function SetReasonCode(executionContext)
+{
+	"use strict";
+	try
+	{
+		var formContext = executionContext.getFormContext();
+		var addressTypeAttr = formContext.getAttribute("addresstypecode");
+		var statusAttr = formContext.getAttribute("kofc_addresschangestatuscode");
+		if (!statusAttr) return;
+		// Always optional in Create mode
+		if (formContext.ui.getFormType() === 1)
+		{
+			statusAttr.setRequiredLevel("none");
+			return;
+		}
+		// Get selected address type
+		var addressTypeVal = addressTypeAttr ? addressTypeAttr.getValue() : null;
+		// NEW >>> If address type = 16 or 15, make it optional
+		if (addressTypeVal === 16 || addressTypeVal === 15 || (addressTypeVal === 17 && CheckKCCFrole()))
+		{
+			statusAttr.setRequiredLevel("none");
+			return;
+		}
+		// NEW <<<
+		// Otherwise, required by default
+		statusAttr.setRequiredLevel("required");
+		// Check for Field Agent role
+		var isFieldAgent = CheckFieldAgent();
+		if (isFieldAgent)
+		{
+			statusAttr.setValue(2); // auto-set Reason Code
+		}
+		else
+		{
+			statusAttr.setValue(null);
+		}
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error in SetReasonCode: ' + (error.description || error.message));
+	}
+}
+//US:21765
+
+function CheckFieldAgent()
+{
+	"use strict";
+	var hasRoleFA = false;
+	try
+	{
+		var roles = Xrm.Utility.getGlobalContext().userSettings.roles;
+		if (roles !== null && roles !== undefined)
+		{
+			roles.forEach(function (item)
+			{
+				if (item.name.toLowerCase() === "insurance sales")
+				{
+					hasRoleFA = true;
+				}
+			});
+		}
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error in CheckFieldAgent: ' + (error.description || error.message));
+	}
+	return hasRoleFA;
+}
+
+function CheckKCCFrole()
+{
+	"use strict";
+	var hasRoleFA = false;
+	try
+	{
+		var roles = Xrm.Utility.getGlobalContext().userSettings.roles;
+		if (roles !== null && roles !== undefined)
+		{
+			roles.forEach(function (item)
+			{
+				if (item.name.toLowerCase() === "kccf leader" || item.name.toLowerCase() === "kccf user" || item.name.toLowerCase() === "kccf vip user" || item.name.toLowerCase() === "system administrator" || item.name.toLowerCase() === "system customizer")
+				{
+					hasRoleFA = true;
+				}
+			});
+		}
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error in CheckFieldAgent: ' + (error.description || error.message));
+	}
+	return hasRoleFA;
+}
+
+function clearFormNotifications(executionContext)
+{
+	"use strict";
+	sessionStorage.setItem("errorNotificationShown", "false");
+	return;
+};
+//US #27651 - Sai Mukka - 02/19/2025
+
+function checkDuplicateAddressType(executionContext)
+{
+	"use strict";
+	try
+	{
+		var formContext = executionContext.getFormContext();
+		var addressRecordId = formContext.data.entity.getId();
+		var parentContactId = formContext.getAttribute("parentid").getValue();
+		var addressType = formContext.getAttribute("addresstypecode").getValue();
+		var addressTypeText = formContext.getAttribute("addresstypecode").getText();
+		//check if the notification has already been show
+		//To avoid multiple notofications on auto save
+		if (sessionStorage.getItem("errorNotificationShown") === "true")
+		{
+			executionContext.getEventArgs().preventDefault();
+			return;
+		}
+		if (!parentContactId || !addressType)
+		{
+			return;
+		}
+		var contactGuid = parentContactId[0].id.replace("{", "").replace("}", "");
+		var _fetchXml = "<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>" +
+			"<entity name='customeraddress'>" +
+			"<attribute name='addresstypecode' />" +
+			"<attribute name='customeraddressid' />" + //Fetch Address record ID
+		"<filter type='and'>" +
+			"<condition attribute='addresstypecode' operator='eq' value='" + addressType + "' />" +
+			"</filter>" +
+			"<link-entity name='contact' from='contactid' to='parentid' link-type='inner' alias='ab'>" +
+			"<filter type='and'>" +
+			"<condition attribute='contactid' operator='eq' uiname='' uitype='contact' value='" + contactGuid + "' />" +
+			"</filter>" +
+			"</link-entity>" +
+			"</entity>" +
+			"</fetch>";
+		var req = new XMLHttpRequest();
+		var globalContext = Xrm.Utility.getGlobalContext();
+		req.open("GET", globalContext.getClientUrl() + "/api/data/v9.2/customeraddresses?fetchXml=" + encodeURIComponent(_fetchXml), false);
+		req.setRequestHeader("OData-MaxVersion", "4.0");
+		req.setRequestHeader("OData-Version", "4.0");
+		req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+		req.setRequestHeader("Accept", "application/json");
+		req.setRequestHeader("Prefer", "odata.include-annotations=*");
+		req.onreadystatechange = function ()
+		{
+			if (this.readyState === 4)
+			{
+				req.onreadystatechange = null;
+				if (this.status === 200)
+				{
+					var result = JSON.parse(this.response);
+					if (result != null && result.value.length > 0)
+					{
+						var isDuplicate = result.value.some(function (addressRecord)
+						{
+							var currentRecordId = addressRecord["customeraddressid"];
+							//if the duplicate is the same reocrd being edited, then allow save.
+							if (addressRecordId && currentRecordId.toLowerCase() === addressRecordId.replace("{", "").replace("}", "").toLowerCase())
+							{
+								return false;
+							}
+							showDuplicateAddressAlert(addressTypeText, executionContext);
+							return true;
+						});
+					}
+				}
+			}
+		};
+		req.onerror = function ()
+		{
+			Xrm.Navigation.openAlertDialog(
+			{
+				text: "An error occurred while saving Address record."
+			});
+		};
+		req.send();
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error in checkDuplicateAddressType: ' + (error.description || error.message));
+	}
+};
+
+function showDuplicateAddressAlert(addressTypeText, executionContext)
+{
+	try
+	{
+		var formContext = executionContext.getFormContext();
+		var alertStrings = {
+			confirmButtonLabel: "OK",
+			text: "Error Message: There is another " + addressTypeText + " present. Only one Address record can be of " + addressTypeText + " Type.",
+			title: "Business Process Error"
+		};
+		var alertOptions = {
+			height: 220,
+			width: 400
+		};
+		Xrm.Navigation.openAlertDialog(alertStrings, alertOptions).then(
+
+		function (success)
+		{
+			sessionStorage.setItem("errorNotificationShown", "true");
+			formContext.getControl("addresstypecode").setFocus();
+			return;
+		});
+		executionContext.getEventArgs().preventDefault();
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error in checkDuplicateAddressType: ' + (error.description || error.message));
+	}
+};
+/*
+Author: Susmitha Thokala
+#US - 27652 -Address form header should display correct info (address type) if action is 'update'
+created: updateFormName
+Date: 05/27/2025
+*/
+// Updated the code by Rejoy while fixing 59592
+function updateFormName(executionContext)
+{
+	"use strict"; 
+	try
+	{
+		var formContext = executionContext.getFormContext(); 
+		var addressTypeText = formContext.getAttribute("addresstypecode").getText(); 
+		if (addressTypeText)
+		{
+			formContext.getAttribute("name").setValue(addressTypeText);
+		}
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog(
+		{
+			text: error.message
+		});
+	}
+}
+/*
+Author: Veera Kolan
+#US - 36836 -Add New Address Types of ‘Retail Investment’ and 'Institutional Investment' to Address Type Optionset - CRM
+Date: 10/02/2025
+*/
+function filterAddressTypeForInvestor(executionContext)
+{
+	"use strict";
+	try
+	{
+		var formContext = executionContext.getFormContext();
+		var attr = formContext.getAttribute("addresstypecode");
+		var ctrl = formContext.getControl("addresstypecode");
+		if (!attr || !ctrl) return;
+		ensureAddressTypeOptionCache(ctrl);
+		// get parent Contact lookup
+		var parent = formContext.getAttribute("parentid") ? formContext.getAttribute("parentid").getValue() : null;
+		if (!parent || !parent.length)
+		{
+			hideInvestorOnlyOptions(ctrl);
+			return;
+		}
+		var contactId = (parent[0].id || "").replace(/[{}]/g, "");
+		// retrieve kofc_contacttype from parent contact
+		Xrm.WebApi.retrieveRecord("contact", contactId, "?$select=kofc_contacttype").then(function (rec)
+		{
+			var formatted = rec["kofc_contacttype"] || "";
+			var isInvestor = false;
+			var isClient = false;
+			var isDonor = false;
+			if (formatted)
+			{
+				// Multi-select formatted looks like "INVESTOR; OTHER"
+				var labels = formatted.split(";").map(s => s.trim().toUpperCase()).flatMap(s => s.split(","));
+				isInvestor = labels.indexOf("258510005") !== -1;
+				isClient = labels.indexOf("258510003") !== -1;
+				isDonor = labels.indexOf("258510002") !== -1;
+			}
+			if (isDonor)
+			{
+				safeAddOption(ctrl, 18);
+			}
+			else
+			{
+				safeRemoveOption(ctrl, 18);
+				var v = attr.getValue();
+				if (v === 18)
+				{
+					attr.setValue(null);
+				}
+			}
+			if (isInvestor)
+			{
+				showInvestorOnlyOptions(ctrl);
+			}
+			else
+			{
+				hideInvestorOnlyOptions(ctrl);
+				var v = attr.getValue();
+				if (v === 16 || v === 15)
+				{
+					attr.setValue(null);
+				}
+			}
+			if (isClient && CheckKCCFrole())
+			{ //show when contactType is Client and also has KCCF role
+				safeAddOptionctrl(ctrl, 17);
+			}
+			else
+			{
+				safeRemoveOption(ctrl, 17);
+			}
+		}).
+		catch (function ()
+		{
+			// default: hide if error occurs
+			hideInvestorOnlyOptions(ctrl);
+		});
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error in filterAddressTypeForInvestor: ' + (error.description || error.message));
+	}
+}
+
+function ensureAddressTypeOptionCache(ctrl)
+{
+	if (AddressTypeOptionCache.initialized) return;
+	(ctrl.getOptions() || []).forEach(function (op, i)
+	{
+		if (op && (op.value === 16 || op.value === 15))
+		{
+			AddressTypeOptionCache.optionsByValue[String(op.value)] = {
+				value: op.value,
+				text: op.text,
+				index: i
+			};
+		}
+	});
+	AddressTypeOptionCache.initialized = true;
+}
+
+function hideInvestorOnlyOptions(ctrl)
+{
+	safeRemoveOption(ctrl, 15);
+	safeRemoveOption(ctrl, 16);
+}
+
+function showInvestorOnlyOptions(ctrl)
+{
+	safeAddOption(ctrl, 15);
+	safeAddOption(ctrl, 16);
+}
+
+function safeRemoveOption(ctrl, value)
+{
+	try
+	{
+		var exists = (ctrl.getOptions() || []).some(function (o)
+		{
+			return o.value === value;
+		});
+		if (exists) ctrl.removeOption(value);
+	}
+	catch (_)
+	{}
+}
+
+function safeAddOption(ctrl, value)
+{
+	try
+	{
+		var exists = (ctrl.getOptions() || []).some(function (o)
+		{
+			return o.value === value;
+		});
+		if (exists) return;
+		var meta = AddressTypeOptionCache.optionsByValue[String(value)];
+		ctrl.addOption(
+		{
+			text: meta ? meta.text : ("Value " + value),
+			value: value
+		});
+	}
+	catch (_)
+	{}
+}
+//Sai Mukka - US #32215 - 01/29/2026 
+
+function lockUnlockAddressType(executionContext)
+{
+	try
+	{
+		var formContext = executionContext.getFormContext();
+		var addressTypeCtrl = formContext.getControl("addresstypecode");
+		var addressTypeAttr = formContext.getAttribute("addresstypecode");
+		var formType = formContext.ui.getFormType();
+		if (!addressTypeCtrl || !formType || !addressTypeAttr) return;
+		//check if its not a create form and also Address Type has a value
+		const isValidAddress = formType !== 1 && addressTypeAttr.getValue() !== "null";
+		isValidAddress ? addressTypeCtrl.setDisabled(true) : addressTypeCtrl.setDisabled(false);
+	}
+	catch (error)
+	{
+		Xrm.Navigation.openAlertDialog('Error while locking Address Type Field: ' + (error.description || error.message));
+	}
+}
