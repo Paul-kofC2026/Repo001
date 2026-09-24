@@ -1,0 +1,396 @@
+// JavaScript source code
+var executionContext;
+var globalContext = Xrm.Utility.getGlobalContext();
+var clientUrl = globalContext.getClientUrl();
+
+var Messages = {
+    Resource: "kofc_/resx/messages",
+    CouncilActiveKey: "OpportunityCloseQuickCreate.ActiveCouncil",
+    CorParishEstablishedKey: "OpportunityCloseQuickCreate.CorParish",
+    ContactCloseOptyKey: "OpportunityCloseQuickCreate.ContactCloseOpty",
+    ErrorKey: "General.Error"
+};
+
+var opportunityTypevalue = {
+    Charity: 258510001,
+    CouncilReactivation: 258510008,
+    InstitutionalInvestment: 258510003,
+    NeedInsurance: 258510000,
+    NewCouncilDevelopment: 258510007,
+    NewMember: 258510006,
+    RetailInvestment: 258510002,
+    KCCF: 258510004,
+    EstablishCor: 258510005,
+    Recruiting: 258510009
+};
+var lossReasonValue = {
+    declinedforother: 258510002,
+    discontinued_comm: 258510006,
+    not_willing_to_relocate: 258510005,
+    only_interested: 258510003,
+    withdrew: 258510007,
+    no_open_territory: 258510000,
+    Future_Prospect: 258510008,
+    NotFitForAgency: 258510004,
+    NotRightTime: 258510001,
+    Other: 258510009,
+    None: 258510010,
+    LostToCompetitor: 258510011,
+    NoBudget: 258510012,
+    NoDecision_NonResponsive: 258510013,
+    Price: 258510014
+}
+var statusReasonValue = {
+    InProgress: 1,
+    OnHold: 2,
+    Won: 3,
+    Declined: 4,
+    Lost: 5,
+    Transferred: 258510006,
+    Pass: 258510005,
+    Terminated: 258510002,
+    LOB: 258510003,
+    ExamLimitReached: 258510004,
+    FileSuspended: 258510000,
+    Withdrawn: 258510001,
+    Createdbyerror: 258510007,
+    LosttoCompetitor: 258510008
+};
+var councilStatusValue = {
+    Active: 258510000,
+    Suspended: 258510001
+};
+var opportunitySubType = {
+    FA: 258510002,
+    IAR: 258510003
+};
+var lostReasons = {
+    Other: 258510009
+};
+var contactTypeValues = {
+    MembershipOption: 258510000,
+    AgentOption: 258510001,
+    DonorOption: 258510002,
+    ClientOption: 258510003,
+    FamilyOption: 258510004,
+    InvestorOption: 258510005
+};
+
+///*
+/// On Load Quick Create Opportunity Close it will trigger
+function OnLoad(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        var opportunitytype; var councilstatus; var councilId; var membershipActualOpp; var marketValue; var actualValueOpp; var initialFunding; var parishValue;
+        var globalContext = Xrm.Utility.getGlobalContext();
+        var queryString = globalContext.getQueryStringParameters();
+        var isCloseAsWonClicked = queryString["param_won"];
+        if (formContext.getAttribute("opportunityid").getValue() !== null && formContext.getAttribute("opportunityid").getValue() !== undefined) {
+            var opportunityId = formContext.getAttribute("opportunityid").getValue()[0].id.replace("{", "").replace("}", "");
+
+            //Added parish filter as part of 3167 story - by sreedeepthi
+            var req = new XMLHttpRequest();
+            req.open("GET", clientUrl + "/api/data/v9.2/opportunities(" + opportunityId + ")?$select=_kofc_council_value,_kofc_parish_value,kofc_membershipactual,kofc_opportunitytype,kofc_opportunitysubtype,kofc_marketvalue,actualvalue,kofc_initialfunding", false);
+            req.setRequestHeader("OData-MaxVersion", "4.0");
+            req.setRequestHeader("OData-Version", "4.0");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            req.send();
+            if (req.status === 200) {
+                var result = JSON.parse(req.response);
+                // Columns
+                councilId = result["_kofc_council_value"]; // Lookup
+                opportunitytype = result["kofc_opportunitytype"]; // Choice
+                //oppSubType = result["kofc_opportunitysubtype"]; // Choice 
+                marketValue = result["kofc_marketvalue"]; //Added as part of US 6871 by Dipti
+                actualValueOpp = result["actualvalue"]; //Added as part of US 6422 by Dipti
+                // Added for US 5742
+                membershipActualOpp = result["kofc_membershipactual"]; // WholeNumber
+                // Added parish filter as part of 3167 story - by sreedeepthi            
+                initialFunding = result["kofc_initialfunding"];
+                // User Story 40670 - commented out below code
+                // Many To One Relationships
+                // if (result.hasOwnProperty("kofc_Council") && result["kofc_Council"] !== null) {
+                //     councilstatus = result["kofc_Council"]["kofc_councilstatus"]; // Choice                
+                // }
+                // //Added parish filter as part of 3167 story - by sreedeepthi
+                // // Many To One Relationships
+                // if (result.hasOwnProperty("kofc_Parish") && result["kofc_Parish"] !== null) {
+                //     parishValue = result["kofc_Parish"]["kofc_corestablished"]; // Boolean
+                //     //var parishValue = result["kofc_Parish"]["kofc_corestablished@OData.Community.Display.V1.FormattedValue"];
+                // }
+            } else {
+                Xrm.Navigation.openAlertDialog('Error in OnLoad: ' + (req.responseText || req.responseText));
+                return false;
+            }
+
+            // Check if Opportunity Close Quick Create form type is 1 and
+            var formType = formContext.ui.getFormType();
+            // User Story 40670 - commented out below code
+            // if (formType === 1 && isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.CouncilReactivation && councilstatus !== undefined && councilstatus === councilStatusValue.Active) {
+            //     formContext.ui.close();
+            //     var councilActiveKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.CouncilActiveKey);
+            //     var errorKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.ErrorKey);
+            //     var alertStrings = { confirmButtonLabel: "OK", text: councilActiveKeyMessage, title: errorKeyMessage };
+            //     // var alertStrings = { confirmButtonLabel: "OK", text: "Council is already Active", title: "ERROR" };
+            //     var alertOptions = { height: 120, width: 260 };
+            //     Xrm.Navigation.openAlertDialog(alertStrings, alertOptions).then(function (success) { }, function (error) { });
+            // }
+            // if (formType === 1 && isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.CouncilReactivation && councilstatus !== undefined && councilstatus === councilStatusValue.Suspended) {
+            //     var record = {};
+            //     record.kofc_councilstatus = councilStatusValue.Active; // Choice
+            // 
+            //     var req = new XMLHttpRequest();
+            //     req.open("PATCH", clientUrl + "/api/data/v9.2/kofc_organizations(" + councilId + ")", false);
+            //     req.setRequestHeader("OData-MaxVersion", "4.0");
+            //     req.setRequestHeader("OData-Version", "4.0");
+            //     req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            //     req.setRequestHeader("Accept", "application/json");
+            //     req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            //     req.send(JSON.stringify(record));
+            // }
+            // if (isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.EstablishCor && parishValue === true) {
+            //     formContext.ui.close();
+            //     var corParishEstablishedKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.CorParishEstablishedKey);
+            //     var corParishEstablishedErrorKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.ErrorKey);
+            //     var corParishEstablishedAlertStrings = { confirmButtonLabel: "OK", text: corParishEstablishedKeyMessage, title: corParishEstablishedErrorKeyMessage };           
+            //     var corParishEstablishedAlertOptions = { height: 120, width: 260 };
+            //     Xrm.Navigation.openAlertDialog(corParishEstablishedAlertStrings, corParishEstablishedAlertOptions).then(function (success) { }, function (error) { });
+            // }
+
+            //Added for US 13911
+            //As per 17054 removing this code block as need to revert these changes
+            /*
+            if (isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.InstitutionalInvestment && initialFunding !== true) {
+                formContext.ui.close();
+                var alertStrings = { confirmButtonLabel: "OK", text: "Initial Funding should be 'Yes' before closing the opportunity as Won", title: "ERROR" };
+                var alertOptions = { height: 120, width: 260 };
+                Xrm.Navigation.openAlertDialog(alertStrings, alertOptions).then(function (success) { }, function (error) { });
+            }
+            */
+
+            //Added for US 5742
+            if (formType === 1 && isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.NewCouncilDevelopment && membershipActualOpp !== null) {
+                formContext.getControl("kofc_annualmembership").setVisible(true);
+                var membershipActualClose = formContext.getControl("kofc_annualmembership");
+                var setMembershipActualCloseOpp = formContext.getAttribute("kofc_annualmembership").setValue(membershipActualOpp);
+            }
+
+            // if (formType === 1 && isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.Recruiting && oppSubType === opportunitySubType.IAR) {
+            //     var statusReasonOptionSet = formContext.getControl("opportunitystatuscode");
+            //     var setStatusWon = formContext.getAttribute("opportunitystatuscode").setValue(statusReasonValue.Pass);
+            //     statusReasonOptionSet.removeOption(statusReasonValue.Won);
+            //     formContext.getControl("kofc_annualmembership").setVisible(false);
+            //     formContext.getAttribute("kofc_annualmembership").setRequiredLevel("none");
+            // }
+            if (formType === 1 && isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.Recruiting) {
+                var statusReasonOptionSet = formContext.getControl("opportunitystatuscode");
+                statusReasonOptionSet.removeOption(statusReasonValue.Pass);
+                statusReasonOptionSet.removeOption(statusReasonValue.Transferred);
+                formContext.getControl("kofc_annualmembership").setVisible(false);
+                formContext.getAttribute("kofc_annualmembership").setRequiredLevel("none");
+            }
+ if (opportunitytype !== undefined && isCloseAsWonClicked !== true) {
+formContext.getControl("kofc_lostreasons").setVisible(true);
+                formContext.getAttribute("kofc_lostreasons").setRequiredLevel("required");
+}
+
+            if (opportunitytype !== undefined && (opportunitytype === opportunityTypevalue.Recruiting && isCloseAsWonClicked !== true)) {
+                var statusReasonOptionSet = formContext.getControl("opportunitystatuscode");
+                statusReasonOptionSet.removeOption(statusReasonValue.Declined);
+                statusReasonOptionSet.removeOption(statusReasonValue.Lost);
+                statusReasonOptionSet.removeOption(statusReasonValue.LOB);
+                statusReasonOptionSet.removeOption(statusReasonValue.ExamLimitReached);
+                statusReasonOptionSet.removeOption(statusReasonValue.Terminated);
+                var setStatus = formContext.getAttribute("opportunitystatuscode").setValue(statusReasonValue.FileSuspended);
+                formContext.getControl("kofc_annualmembership").setVisible(false);
+                formContext.getAttribute("kofc_annualmembership").setRequiredLevel("none");
+                //Added as part of US 5396
+                formContext.getControl("kofc_lostreasons").setVisible(true);
+                formContext.getAttribute("kofc_lostreasons").setRequiredLevel("required");
+                // changes start for #42542
+                var lossReasonOptionSet = formContext.getControl("kofc_lostreasons");
+                lossReasonOptionSet.removeOption(lossReasonValue.None);
+                lossReasonOptionSet.removeOption(lossReasonValue.LostToCompetitor);
+                lossReasonOptionSet.removeOption(lossReasonValue.NoBudget);
+                lossReasonOptionSet.removeOption(lossReasonValue.NoDecision_NonResponsive);
+                lossReasonOptionSet.removeOption(lossReasonValue.Price);
+                // changes end for #42542
+            }
+            // if (opportunitytype !== undefined && (opportunitytype === opportunityTypevalue.Recruiting && oppSubType === opportunitySubType.IAR && isCloseAsWonClicked !== true)) {
+            //     var statusReasonOptionSet = formContext.getControl("opportunitystatuscode");
+            //     statusReasonOptionSet.removeOption(statusReasonValue.Withdrawn);
+            //     statusReasonOptionSet.removeOption(statusReasonValue.FileSuspended);
+            //     statusReasonOptionSet.removeOption(statusReasonValue.Declined);
+            //     statusReasonOptionSet.removeOption(statusReasonValue.Lost);
+            //     var setStatus = formContext.getAttribute("opportunitystatuscode").setValue(statusReasonValue.Terminated);
+            //     formContext.getControl("kofc_annualmembership").setVisible(false);
+            //     formContext.getAttribute("kofc_annualmembership").setRequiredLevel("none");
+            // }
+
+            if (opportunitytype !== undefined && (opportunitytype === opportunityTypevalue.NeedInsurance || opportunitytype === opportunityTypevalue.InstitutionalInvestment || opportunitytype === opportunityTypevalue.RetailInvestment)) {
+                formContext.getControl("kofc_aumwon").setVisible(false);
+                formContext.getAttribute("kofc_aumwon").setRequiredLevel("none");
+                //formContext.getControl("kofc_sizeofwin").setVisible(true);
+                //formContext.getAttribute("kofc_sizeofwin").setRequiredLevel("required");
+                formContext.getControl("actualrevenue").setVisible(true);
+                formContext.getControl("kofc_annualmembership").setVisible(false);
+            }
+            /*
+            if (isCloseAsWonClicked && opportunitytype !== undefined && (opportunitytype === opportunityTypevalue.NeedInsurance)) {
+                formContext.getAttribute("actualrevenue").setValue(actualValueOpp);//Added as part of US 6422 by Dipti
+            }
+            */
+            if (opportunitytype !== undefined && (opportunitytype === opportunityTypevalue.Charity || opportunitytype === opportunityTypevalue.KCCF)) {
+                formContext.getControl("kofc_sizeofwin").setVisible(false);
+                formContext.getAttribute("kofc_sizeofwin").setRequiredLevel("none");
+                //formContext.getControl("kofc_aumwon").setVisible(true);
+                //formContext.getAttribute("kofc_aumwon").setRequiredLevel("required");
+                formContext.getControl("actualrevenue").setVisible(true);
+                formContext.getControl("kofc_annualmembership").setVisible(false);
+            }
+            // US : 5668 and 6406
+            if (opportunitytype !== undefined && (opportunitytype === opportunityTypevalue.EstablishCor || opportunitytype === opportunityTypevalue.NewMember)) {
+                formContext.getControl("kofc_annualmembership").setVisible(false);
+                formContext.getAttribute("kofc_annualmembership").setRequiredLevel("none");
+            }
+            if (formType === 1 && isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype !== opportunityTypevalue.Recruiting) {
+                var statusReasonOptionSet = formContext.getControl("opportunitystatuscode");
+                statusReasonOptionSet.removeOption(statusReasonValue.Pass);
+                statusReasonOptionSet.removeOption(statusReasonValue.Transferred);
+            }
+            if (opportunitytype !== undefined && opportunitytype !== opportunityTypevalue.Recruiting) {
+                var statusReasonOptionSet = formContext.getControl("opportunitystatuscode");
+                statusReasonOptionSet.removeOption(statusReasonValue.LOB);
+                statusReasonOptionSet.removeOption(statusReasonValue.ExamLimitReached);
+                statusReasonOptionSet.removeOption(statusReasonValue.Terminated);
+                statusReasonOptionSet.removeOption(statusReasonValue.Withdrawn);
+                statusReasonOptionSet.removeOption(statusReasonValue.FileSuspended);
+                // changes start for #42542
+                var lossReasonOptionSet = formContext.getControl("kofc_lostreasons");
+                lossReasonOptionSet.removeOption(lossReasonValue.declinedforother);
+                lossReasonOptionSet.removeOption(lossReasonValue.discontinued_comm);
+                lossReasonOptionSet.removeOption(lossReasonValue.not_willing_to_relocate);
+                lossReasonOptionSet.removeOption(lossReasonValue.only_interested);
+                lossReasonOptionSet.removeOption(lossReasonValue.withdrew);
+                lossReasonOptionSet.removeOption(lossReasonValue.no_open_territory);
+                lossReasonOptionSet.removeOption(lossReasonValue.Future_Prospect);
+                lossReasonOptionSet.removeOption(lossReasonValue.NotFitForAgency);
+                lossReasonOptionSet.removeOption(lossReasonValue.NotRightTime);
+                // changes end for #42542
+            }
+            //US 6871 - Show Market Value field and hide Actual Revenue field for InstitutionalInvestment by Dipti
+            if (isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.InstitutionalInvestment) {
+                formContext.getAttribute("kofc_marketvalue").setValue(marketValue);
+                formContext.getAttribute("actualrevenue").setValue(marketValue);
+                formContext.getControl("actualrevenue").setVisible(false);
+                formContext.getControl("kofc_marketvalue").setVisible(true);
+                //Added for US 13911
+                formContext.getAttribute("kofc_marketvalue").setRequiredLevel("required");
+            }
+            // else {
+            // //formContext.getControl("kofc_sizeofwin").setVisible(false);
+            // //formContext.getAttribute("kofc_sizeofwin").setRequiredLevel("none");
+            // //formContext.getControl("kofc_aumwon").setVisible(false);
+            // //formContext.getAttribute("kofc_aumwon").setRequiredLevel("none");
+            // //formContext.getControl("kofc_annualmembership").setVisible(true);
+            // }
+        }
+    }
+    catch (err) {
+        Xrm.Navigation.openAlertDialog('Error in OnLoad: ' + (err.description || err.message));
+        return false;
+    }
+}
+
+// Added for US 5742 update actual memnership on opportunity on update of close opportunity actual membership update.
+function OnSave(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        var opportunitytype;
+        var globalContext = Xrm.Utility.getGlobalContext();
+        var queryString = globalContext.getQueryStringParameters();
+        var isCloseAsWonClicked = queryString["param_won"];
+        if (formContext.getAttribute("opportunityid").getValue() !== null && formContext.getAttribute("opportunityid").getValue() !== undefined) {
+            var opportunityId = formContext.getAttribute("opportunityid").getValue()[0].id.replace("{", "").replace("}", "");
+            var membershipActualCloseUpdated = formContext.getAttribute("kofc_annualmembership").getValue();
+            var marketValue = formContext.getAttribute("kofc_marketvalue").getValue();
+            var req = new XMLHttpRequest();
+            req.open("GET", clientUrl + "/api/data/v9.2/opportunities(" + opportunityId + ")?$select=kofc_membershipactual,kofc_opportunitytype,kofc_marketvalue,actualvalue,_parentcontactid_value&$expand=parentcontactid($select=kofc_contacttype)", false);
+            req.setRequestHeader("OData-MaxVersion", "4.0");
+            req.setRequestHeader("OData-Version", "4.0");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            req.send();
+            if (req.status === 200) {
+                var result = JSON.parse(req.response);
+                // Columns
+                opportunitytype = result["kofc_opportunitytype"];
+                var opportunityContact = result["_parentcontactid_value"];			// Choice
+                if (isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.NewCouncilDevelopment && membershipActualCloseUpdated !== null) {
+                    var record = {};
+                    record.kofc_membershipactual = membershipActualCloseUpdated; // WholeNumber                
+                }
+                else if (isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.InstitutionalInvestment) {
+                    var record = {};
+                    record.kofc_marketvalue = marketValue; // Currency
+                    record.actualvalue = marketValue; // Currency               
+                }
+                else if (isCloseAsWonClicked && opportunitytype !== undefined && opportunitytype === opportunityTypevalue.NewMember && opportunityContact !== null && opportunityContact !== undefined && result.hasOwnProperty("parentcontactid") && result["parentcontactid"] !== null) {
+                    var parentcontactid_kofc_contacttype = result["parentcontactid"]["kofc_contacttype"]; // Choices
+                    if (parentcontactid_kofc_contacttype === null || parentcontactid_kofc_contacttype === undefined || !parentcontactid_kofc_contacttype.includes(contactTypeValues.MembershipOption)) {
+                        var contactCloseOptyKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.ContactCloseOptyKey);
+                        alert(contactCloseOptyKeyMessage);//"Contact should be mapped as Member before closing the opportunity"
+                        executionContext.getEventArgs().preventDefault();
+                    }
+                }
+                var req = new XMLHttpRequest();
+                req.open("PATCH", clientUrl + "/api/data/v9.2/opportunities(" + opportunityId + ")", false);
+                req.setRequestHeader("OData-MaxVersion", "4.0");
+                req.setRequestHeader("OData-Version", "4.0");
+                req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+                req.setRequestHeader("Accept", "application/json");
+                req.setRequestHeader("Prefer", "odata.include-annotations=*");
+                req.send(JSON.stringify(record));
+            }
+            else {
+                Xrm.Navigation.openAlertDialog('Error in OnLoad: ' + (req.responseText || req.responseText));
+            }
+        }
+    }
+    catch (err) {
+        Xrm.Navigation.openAlertDialog('Error in OnLoad: ' + (err.description || err.message));
+        return false;
+    }
+}
+//On change added event handler
+//Added by:Harshada Pimple
+//Created On:21st Dec 2023
+//US: 5396
+
+function OnChange(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("kofc_lostreasons").getValue() !== undefined && formContext.getAttribute("kofc_lostreasons").getValue() !== null) {
+            var lostReason = formContext.getAttribute("kofc_lostreasons").getValue();
+            if (lostReason.includes(lostReasons.Other)) {
+                formContext.getAttribute("description").setRequiredLevel("required");
+            }
+            else {
+                formContext.getAttribute("description").setRequiredLevel("none");
+            }
+        }
+        else {
+            formContext.getAttribute("description").setRequiredLevel("none");
+        }
+    }
+    catch (err) {
+        Xrm.Navigation.openAlertDialog('Error in OnChange: ' + (err.description || err.message));
+        return false;
+    }
+}
