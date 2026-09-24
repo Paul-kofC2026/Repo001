@@ -1,0 +1,524 @@
+//Author:Jangam Bheemesh
+//Created On:12/07/2023
+//OnLoad Event
+//US 3354 and 3390
+
+var executionContext;
+
+var Messages = {
+    Resource: "kofc_/resx/messages",
+    TenDigitNumericValueKey: "General.TenDigitNumericValue"
+};
+
+//OptionSet Values for Lead Type
+var optionSetValues = {
+    Insurance: 258510000,
+    Fraternal: 258510001,
+    Charity: 258510002,
+    RetailInvestment: 258510003,
+    InstitutionalInvestment: 258510004,
+    KCCF: 258510005,
+    Recruiting: 258510006
+};
+
+//*************** Common Functions *********
+// Common Alert Function
+function DisplayAlertMessage(customTitle, customMessage) {
+    "use strict";
+    try {
+        var alertStrings = { confirmButtonLabel: "OK", title: customTitle, text: customMessage, };
+        var alertOptions = { height: 120, width: 260 };
+        Xrm.Navigation.openAlertDialog(alertStrings, alertOptions).then(function (success) { }, function (error) { });
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('DisplayAlertMessage Error: ' + (error.description || error.message));
+    }
+}
+
+//Function will be called on load of quick create form of Lead.
+
+
+//Funtion to Open to Quick Lead form On click New Lead Button
+function CreateQuickCreateLead(selectedControl) {
+    "use strict";
+    try {
+        //Get the SubGrid Control
+        var viewSelector = selectedControl.getViewSelector();
+        if (viewSelector !== null && viewSelector !== undefined) {
+            var currentViewName = selectedControl.getViewSelector().getCurrentView().name;
+            if (currentViewName === "Recruiting Leads") {
+                var entityFormOptions = {};
+                entityFormOptions["entityName"] = "lead";
+                entityFormOptions["useQuickCreateForm"] = true;
+                var formParameters = {};
+                formParameters["kofc_leadtype"] = optionSetValues.Recruiting;
+                Xrm.Navigation.openForm(entityFormOptions, formParameters).then(function (success) { }, function (error) { })
+            }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('CreateQuickCreateLead Error: ' + (error.description || error.message));
+    }
+}
+
+//Function to Set Lead Type Disabled for recruiting.
+function MakeLeadTypeDisabled(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("kofc_leadtype").getValue() !== null && formContext.getAttribute("kofc_leadtype").getValue() !== undefined) {
+            var leadType = formContext.getAttribute("kofc_leadtype").getValue();
+            if (leadType === optionSetValues.Recruiting) {
+                formContext.getControl("kofc_leadtype").setDisabled(true);
+            }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function MakeLeadTypeDisabled: " + (error.description || error.message));
+    }
+}
+
+//Function to show hide custom new Lead button for recruiting Lead subgrid.
+function EnableNewLeadCustomButton(selectedControl) {
+    "use strict";
+    try {
+        var viewSelector = selectedControl.getViewSelector();
+        if (viewSelector !== null && viewSelector !== undefined) {
+            var currentViewName = selectedControl.getViewSelector().getCurrentView().name;
+            if (currentViewName === "Recruiting Leads") { return true; } else { return false; }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function EnableNewLeadCustomButton: " + (error.description || error.message));
+    }
+}
+
+//Function to show hide OOB new Lead button for Lead subgrid and hide for recruting grids.
+function EnableOOBNewLeadButton(selectedControl) {
+    "use strict";
+    try {
+        var viewSelector = selectedControl.getViewSelector();
+        if (viewSelector !== null && viewSelector !== undefined) {
+            var currentViewName = selectedControl.getViewSelector().getCurrentView().name;
+            if (currentViewName === "Recruiting Leads") { return false; } else { return true; }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function EnableOOBNewLeadButton: " + (error.description || error.message));
+    }
+}
+
+//Function to Filter Lead Subtype Based on Lead Type
+function FilterLeadSubType(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("kofc_leadtype").getValue() !== null) {
+            var leadType = formContext.getAttribute("kofc_leadtype").getValue();
+            //Apply Search on lookup field OnClick 
+            formContext.getControl("kofc_leadsubtype").addPreSearch(function () {
+                var leadType = formContext.getAttribute("kofc_leadtype").getValue();
+                //Apply the filter condition
+                var filter = "<filter type='and'><condition attribute='kofc_leadtype' operator='eq' value='" + leadType + "' /></filter>";
+                //Populate the filter values into lookup field
+                formContext.getControl("kofc_leadsubtype").addCustomFilter(filter);
+            });
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function FilterLeadSubType: " + (error.description || error.message));
+    }
+}
+
+function GetLoggedInUserTeamSecurityRole(formContext) {
+    "use strict";
+    try {
+        // Get the current user's role
+        var loggedUserRoles = Xrm.Utility.getGlobalContext().userSettings.roles;
+        var flag_Insurance = true;
+
+        var optionSetControl = formContext.getControl("kofc_leadtype");
+        // Clear existing options from the option set
+        loggedUserRoles.forEach(function hasRoleName(item, index) {
+            if ((item.name === "Insurance Leader" || item.name === "Insurance Sales" || item.name === "Agency Support" || item.name === "System Administrator" || item.name === "System Customizer") && flag_Insurance) {
+                flag_Insurance = false;
+            }
+        });
+        if (flag_Insurance) {
+            optionSetControl.removeOption(optionSetValues.Recruiting);
+        }
+    } catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function GetLoggedInUserTeamSecurityRole: " + (error.description || error.message));
+    }
+}
+
+//Function will be called on change of parentcontactid(Contact) field.
+function ClearLeadFields(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        formContext.ui.clearFormNotification("ErrorMessage");
+        if (formContext.getAttribute("parentcontactid").getValue() == null && formContext.getAttribute("parentcontactid").getValue() == undefined) {
+            formContext.getAttribute("firstname").setValue(null);
+            formContext.getAttribute("kofc_gendercode").setValue(null);
+            formContext.getAttribute("lastname").setValue(null);
+            formContext.getAttribute("kofc_dateofbirth").setValue(null);
+            formContext.getAttribute("telephone1").setValue(null);
+            formContext.getAttribute("telephone2").setValue(null);
+            formContext.getAttribute("mobilephone").setValue(null);
+            formContext.getAttribute("emailaddress1").setValue(null);
+            formContext.getAttribute("address1_line1").setValue(null);
+            formContext.getAttribute("address1_line2").setValue(null);
+            formContext.getAttribute("address1_line3").setValue(null);
+            formContext.getAttribute("address1_city").setValue(null);
+            formContext.getAttribute("kofc_address_stateorprovince").setValue(null);
+            formContext.getAttribute("address1_postalcode").setValue(null);
+            formContext.getAttribute("kofc_address_country").setValue(null);
+        }
+    }
+    catch (error) {
+        DisplayAlertMessage("ERROR", "Error At function ClearLeadFields(LeadQuickCreate.js)" + (error.description || error.message));
+    }
+}
+
+//On Save Contact Set Lead Firstname, Lastname and other field on lead from contact.
+//Below function not in use, as the purpose has been served by 'BindContactDetails' function.
+function SaveContactField(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("parentcontactid").getValue() !== null && formContext.getAttribute("parentcontactid").getValue() !== undefined) {
+
+            var contact = formContext.getAttribute("parentcontactid").getValue();
+            var contactId = contact[0].id.replace('{', '').replace('}', '');
+            var req = new XMLHttpRequest();
+            var globalContext = Xrm.Utility.getGlobalContext();
+            req.open("GET", globalContext.getClientUrl() + "/api/data/v9.2/contacts(" + contactId + ")?$select=firstname,lastname,kofc_gendercode,kofc_birthdate,telephone1,telephone2,mobilephone,emailaddress1,address1_line1,address1_line2,address1_line3,address1_city,address1_postalcode,kofc_address_stateorprovince,kofc_address_country", false);
+            req.setRequestHeader("OData-MaxVersion", "4.0");
+            req.setRequestHeader("OData-Version", "4.0");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            req.onreadystatechange = function () {
+                if (this.readyState === 4) {
+                    req.onreadystatechange = null;
+                    if (this.status === 200) {
+                        var result = JSON.parse(this.response);
+                        var contactFirstName = result["firstname"];
+                        var contactLastName = result["lastname"];
+                        if (contactFirstName !== null) {
+                            //Set Lead First Name
+                            formContext.getAttribute("firstname").setValue(contactFirstName);
+                        }
+                        else {
+                            formContext.getAttribute("firstname").setValue(null);
+                        }
+                        if (contactLastName !== null) {
+                            formContext.getAttribute("lastname").setValue(contactLastName);
+                        }
+                        else {
+                            formContext.getAttribute("lastname").setValue(null);
+                        }
+                        if (result["kofc_gendercode"] !== null) {
+                            formContext.getAttribute("kofc_gendercode").setValue(result.kofc_gendercode);
+                            /*if (result["gendercode"] == 1)
+                                formContext.getAttribute("kofc_gender").setValue(258510000);
+                            else if (result["gendercode"] == 2)
+                                formContext.getAttribute("kofc_gender").setValue(258510001);*/
+                        }
+                        else {
+                            formContext.getAttribute("kofc_gendercode").setValue(null);
+                        }
+                        if (result["kofc_birthdate"] !== null) {
+                            formContext.getAttribute("kofc_dateofbirth").setValue(new Date(result.kofc_birthdate));
+                        }
+                        else {
+                            formContext.getAttribute("kofc_dateofbirth").setValue(null);
+                        }
+                        if (result["telephone1"] !== null) {
+                            formContext.getAttribute("telephone1").setValue(result.telephone1);
+                        }
+                        else {
+                            formContext.getAttribute("telephone1").setValue(null);
+                        }
+                        if (result["telephone2"] !== null) {
+                            formContext.getAttribute("telephone2").setValue(result.telephone2);
+                        }
+                        else {
+                            formContext.getAttribute("telephone2").setValue(null);
+                        }
+                        if (result["mobilephone"] !== null) {
+                            formContext.getAttribute("mobilephone").setValue(result.mobilephone);
+                        }
+                        else {
+                            formContext.getAttribute("mobilephone").setValue(null);
+                        }
+                        if (result["emailaddress1"] !== null) {
+                            formContext.getAttribute("emailaddress1").setValue(result.emailaddress1);
+                        }
+                        else {
+                            formContext.getAttribute("emailaddress1").setValue(null);
+                        }
+                        if (result["address1_line1"] !== null) {
+                            formContext.getAttribute("address1_line1").setValue(result.address1_line1);
+                        }
+                        else {
+                            formContext.getAttribute("address1_line1").setValue(null);
+                        }
+                        if (result["address1_line2"] !== null) {
+                            formContext.getAttribute("address1_line2").setValue(result.address1_line2);
+                        }
+                        else {
+                            formContext.getAttribute("address1_line2").setValue(null);
+                        }
+                        if (result["address1_line3"] !== null) {
+                            formContext.getAttribute("address1_line3").setValue(result.address1_line3);
+                        }
+                        else {
+                            formContext.getAttribute("address1_line3").setValue(null);
+                        }
+                        if (result["address1_city"] !== null) {
+                            formContext.getAttribute("address1_city").setValue(result.address1_city);
+                        }
+                        else {
+                            formContext.getAttribute("address1_city").setValue(null);
+                        }
+                        if (result["address1_postalcode"] !== null) {
+                            formContext.getAttribute("address1_postalcode").setValue(result.address1_postalcode);
+                        }
+                        else {
+                            formContext.getAttribute("address1_postalcode").setValue(null);
+                        }
+                        if (result["kofc_address_stateorprovince"] !== null) {
+                            formContext.getAttribute("kofc_address_stateorprovince").setValue(result.kofc_address_stateorprovince);
+                        }
+                        else {
+                            formContext.getAttribute("kofc_address_stateorprovince").setValue(null);
+                        }
+                        if (result["kofc_address_country"] !== null) {
+                            formContext.getAttribute("kofc_address_country").setValue(result.kofc_address_country);
+                        }
+                        else {
+                            formContext.getAttribute("kofc_address_country").setValue(null);
+                        }
+                    } else {
+                        DisplayAlertMessage("ERROR", "Error At function SaveContactField(LeadQuickCreate.js)" + (error.description || error.message));
+                    }
+                }
+            };
+            req.send();
+        }
+        else {
+            ClearLeadFields(executionContext);
+        }
+    }
+    catch (error) {
+        DisplayAlertMessage("ERROR", "Error At function SaveContactField(LeadQuickCreate.js)" + (error.description || error.message));
+    }
+}
+//On Change Contact Set fields on lead from contact.
+function BindContactDetails(executionContext) {
+    "use strict";
+    try {
+        var formContext = executionContext.getFormContext();
+        if (formContext.getAttribute("parentcontactid").getValue() !== null && formContext.getAttribute("parentcontactid").getValue() !== undefined) {
+            var contact = formContext.getAttribute("parentcontactid").getValue();
+            var contactId = contact[0].id.replace('{', '').replace('}', '');
+            var req = new XMLHttpRequest();
+            var globalContext = Xrm.Utility.getGlobalContext();
+            req.open("GET", globalContext.getClientUrl() + "/api/data/v9.2/contacts(" + contactId + ")?$select=firstname,lastname,kofc_gendercode,kofc_birthdate,kofc_contacttype,telephone1,telephone2,mobilephone,emailaddress1,address1_line1,address1_line2,address1_line3,address1_city,address1_postalcode,kofc_address_stateorprovince,kofc_address_country", false);
+            req.setRequestHeader("OData-MaxVersion", "4.0");
+            req.setRequestHeader("OData-Version", "4.0");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            req.onreadystatechange = function () {
+                if (this.readyState === 4) {
+                    req.onreadystatechange = null;
+                    if (this.status === 200) {
+                        var result = JSON.parse(this.response);
+                        var contactFirstName = result["firstname"];
+                        var contactLastName = result["lastname"];
+                        var contactType = result["kofc_contacttype"];
+                        if (contactFirstName !== null) {
+                            formContext.getAttribute("firstname").setValue(contactFirstName);
+                        }
+                        else {
+                            formContext.getAttribute("firstname").setValue(null);
+                        }
+                        if (contactLastName !== null) {
+                            formContext.getAttribute("lastname").setValue(contactLastName);
+                        }
+                        else {
+                            formContext.getAttribute("lastname").setValue(null);
+                        }
+                        if (result["kofc_gendercode"] !== null) {
+                            formContext.getAttribute("kofc_gendercode").setValue(result.kofc_gendercode);
+                            /*if (result["gendercode"] == 1)
+                                formContext.getAttribute("kofc_gender").setValue(258510000);
+                            else if (result["gendercode"] == 2)
+                                formContext.getAttribute("kofc_gender").setValue(258510001);*/
+                            if (contactType !== null && contactType.split(",").some(value => ["258510000", "258510001", "258510003"].includes(value.trim()))) {
+                                formContext.getControl("kofc_gendercode").setDisabled(true);
+                            } else {
+                                formContext.getControl("kofc_gendercode").setDisabled(false);
+                            }
+                        }
+                        else {
+                            formContext.getAttribute("kofc_gendercode").setValue(null);
+                        }
+                        if (result["kofc_birthdate"] !== null) {
+                            formContext.getAttribute("kofc_dateofbirth").setValue(new Date(result.kofc_birthdate));
+                            if (contactType !== null && contactType.split(",").some(value => ["258510000", "258510001", "258510003"].includes(value.trim()))) {
+                                formContext.getControl("kofc_dateofbirth").setDisabled(true);
+                            } else {
+                                formContext.getControl("kofc_dateofbirth").setDisabled(false);
+                            }
+                        }
+                        else {
+                            formContext.getAttribute("kofc_dateofbirth").setValue(null);
+                        }
+                        if (result["telephone1"] !== null) {
+                            formContext.getAttribute("telephone1").setValue(result.telephone1);
+                        }
+                        else {
+                            formContext.getAttribute("telephone1").setValue(null);
+                        }
+                        if (result["telephone2"] !== null) {
+                            formContext.getAttribute("telephone2").setValue(result.telephone2);
+                        }
+                        else {
+                            formContext.getAttribute("telephone2").setValue(null);
+                        }
+                        if (result["mobilephone"] !== null) {
+                            formContext.getAttribute("mobilephone").setValue(result.mobilephone);
+                        }
+                        else {
+                            formContext.getAttribute("mobilephone").setValue(null);
+                        }
+                        if (result["emailaddress1"] !== null) {
+                            formContext.getAttribute("emailaddress1").setValue(result.emailaddress1);
+                        }
+                        else {
+                            formContext.getAttribute("emailaddress1").setValue(null);
+                        }
+                        if (result["address1_line1"] !== null) {
+                            formContext.getAttribute("address1_line1").setValue(result.address1_line1);
+                        }
+                        else {
+                            formContext.getAttribute("address1_line1").setValue(null);
+                        }
+                        if (result["address1_line2"] !== null) {
+                            formContext.getAttribute("address1_line2").setValue(result.address1_line2);
+                        }
+                        else {
+                            formContext.getAttribute("address1_line2").setValue(null);
+                        }
+                        if (result["address1_line3"] !== null) {
+                            formContext.getAttribute("address1_line3").setValue(result.address1_line3);
+                        }
+                        else {
+                            formContext.getAttribute("address1_line3").setValue(null);
+                        }
+                        if (result["address1_city"] !== null) {
+                            formContext.getAttribute("address1_city").setValue(result.address1_city);
+                        }
+                        else {
+                            formContext.getAttribute("address1_city").setValue(null);
+                        }
+                        if (result["address1_postalcode"] !== null) {
+                            formContext.getAttribute("address1_postalcode").setValue(result.address1_postalcode);
+                        }
+                        else {
+                            formContext.getAttribute("address1_postalcode").setValue(null);
+                        }
+                        if (result["kofc_address_stateorprovince"] !== null) {
+                            formContext.getAttribute("kofc_address_stateorprovince").setValue(result.kofc_address_stateorprovince);
+                        }
+                        else {
+                            formContext.getAttribute("kofc_address_stateorprovince").setValue(null);
+                        }
+                        if (result["kofc_address_country"] !== null) {
+                            formContext.getAttribute("kofc_address_country").setValue(result.kofc_address_country);
+                        }
+                        else {
+                            formContext.getAttribute("kofc_address_country").setValue(null);
+                        }
+                        //formContext.data.save();
+                    } else {
+                        DisplayAlertMessage("ERROR", "Error At function OnChangeContactLookup(LeadMobile.js)" + (error.description || error.message));
+                    }
+                }
+            };
+            req.send();
+        }
+        else {
+            ClearLeadFields(executionContext);
+        }
+    }
+    catch (error) {
+        DisplayAlertMessage("ERROR", "Error At function OnChangeContactLookup(LeadMobile.js)" + (error.description || error.message));
+    }
+}
+
+function OnChangePhoneNumber(executionContext, attributeSchema) {
+    "use strict";
+    try {
+
+        var formContext = executionContext.getFormContext();
+        var phoneNumberPattern = /^\(\d{3}\) \d{3}-\d{4}$/;
+        var phone = formContext.getAttribute(attributeSchema).getValue(); //get Phone value
+        formContext.getControl(attributeSchema).clearNotification("PhoneError");
+        if (phone !== null && !phoneNumberPattern.test(phone)) {
+            if (phone !== null && (phone.length < 10 || phone.length > 10 || isNaN(phone))) {
+                var tenDigitNumericValueKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.TenDigitNumericValueKey);
+                formContext.getControl(attributeSchema).setNotification(tenDigitNumericValueKeyMessage, "PhoneError");
+            }
+            else {
+                formContext.getControl(attributeSchema).clearNotification("PhoneError");
+                formContext.getAttribute(attributeSchema).setValue("(" + phone.substr(0, 3) + ") " + phone.substr(3, 3) + "-" + phone.substr(6, phone.length));
+            }
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog("Error At function OnChangePhoneNumber" + (error.description || error.message));
+    }
+}
+
+function setLeadTypeForOnPageLoadForRoles(executionContext) {
+    var formContext = executionContext.getFormContext();
+    if (formContext !== "undefined" && formContext !== null) {
+
+        var userRoles = Xrm.Utility.getGlobalContext().userSettings.roles;
+
+        if (userRoles !== null && userRoles !== undefined) {
+            userRoles.forEach(function (item) {
+                if (item.name.toLowerCase() === "insurance leader" || item.name.toLowerCase() === "insurance sales" || item.name.toLowerCase() === "agency support") {
+                    formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.Insurance);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "fraternal manager") {
+                    formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.Fraternal);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "charity leader" || item.name.toLowerCase() === "charity user") {
+                    formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.Charity);
+                    return;
+                }//changed 2.0
+                else if (item.name.toLowerCase() === "investment manager" || item.name.toLowerCase() === "investment support" || item.name.toLowerCase() == "investment leader​​") {
+                    formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.InstitutionalInvestment);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "retail investment sales") {
+                    formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.RetailInvestment);
+                    return;
+                }
+                else if (item.name.toLowerCase() === "kccf leader" || item.name.toLowerCase() === "kccf user") {
+                    formContext.getControl('kofc_leadtype').getAttribute().setValue(optionSetValues.KCCF);
+                    return;
+                }
+
+            });
+        }
+    }
+}
