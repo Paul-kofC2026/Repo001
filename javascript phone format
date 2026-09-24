@@ -1,0 +1,133 @@
+var PhoneNumberManager = (function () {
+
+    "use strict";
+
+    var PHONE_ERROR_ID = "PhoneValidation";
+
+    function onLoad(executionContext) {
+
+        formatField(executionContext, "telephone1");
+        formatField(executionContext, "telephone2");
+        formatField(executionContext, "mobilephone");
+    }
+
+    function onPhoneChange(executionContext) {
+
+        var formContext = executionContext.getFormContext();
+        var attribute = executionContext.getEventSource();
+
+        if (!attribute) {
+            return;
+        }
+
+        var fieldName = attribute.getName();
+
+        validateField(formContext, fieldName);
+        formatField(executionContext, fieldName);
+    }
+
+    function validateField(formContext, fieldName) {
+
+        var attribute = formContext.getAttribute(fieldName);
+        var control = formContext.getControl(fieldName);
+
+        if (!attribute || !control) {
+            return true;
+        }
+
+        control.clearNotification(PHONE_ERROR_ID);
+
+        var value = attribute.getValue();
+
+        if (!value) {
+            return true;
+        }
+
+        var digits = value.replace(/\D/g, "");
+
+        if (digits.length < 7) {
+
+            control.setNotification(
+                "Phone number must contain a valid country code and telephone number.",
+                PHONE_ERROR_ID
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+
+    function formatField(executionContext, fieldName) {
+
+        var formContext = executionContext.getFormContext();
+
+        var attribute = formContext.getAttribute(fieldName);
+
+        if (!attribute) {
+            return;
+        }
+
+        var phone = attribute.getValue();
+
+        if (!phone) {
+            return;
+        }
+
+        var formatted = formatForDisplay(phone);
+
+        if (formatted !== phone) {
+            attribute.setValue(formatted);
+        }
+    }
+
+    function formatForDisplay(phone) {
+
+        if (!phone) {
+            return phone;
+        }
+
+        var digits = phone.replace(/\D/g, "");
+
+        /*
+         * US / Canada
+         * +12245221234
+         * =>
+         * (224) 522-1234
+         */
+        if (digits.length === 11 && digits.startsWith("1")) {
+
+            return "(" +
+                digits.substring(1, 4) +
+                ") " +
+                digits.substring(4, 7) +
+                "-" +
+                digits.substring(7);
+        }
+
+        /*
+         * US number without country
+         */
+        if (digits.length === 10) {
+
+            return "(" +
+                digits.substring(0, 3) +
+                ") " +
+                digits.substring(3, 6) +
+                "-" +
+                digits.substring(6);
+        }
+
+        /*
+         * International numbers
+         * Leave formatted as entered
+         */
+        return phone;
+    }
+
+    return {
+        onLoad: onLoad,
+        onPhoneChange: onPhoneChange
+    };
+
+})();
