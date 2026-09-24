@@ -1,0 +1,78 @@
+function onLoad(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    formContext.data.addOnLoad(productFilter);
+}
+
+function onSave(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    formContext.data.entity.addOnSave(restrictSelectingSameProduct);
+}
+
+function productFilter(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    if (formContext.getControl('kofc_opportunity') !== null) {
+        formContext.getControl('kofc_product').addPreSearch(addProductFilter);
+    }
+}
+
+function addProductFilter(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    try {
+        var filterProduct = "<filter type='and'><condition attribute='kofc_productcategory' value ='258510002' operator='eq'/></filter >";
+        formContext.getControl('kofc_product').addCustomFilter(filterProduct);
+    }
+    catch (e) {
+        Xrm.Navigation.openAlertDialog('addFilter Error: ' + (e.description || e.message));
+    }
+}
+
+function restrictSelectingSameProduct(executionContext) {
+    "use strict";
+    var formContext = executionContext.getFormContext();
+    var productValue = formContext.getAttribute('kofc_product').getValue()[0].name;
+    var opportunityValue = formContext.getAttribute('kofc_opportunity').getValue()[0].id;
+    try {
+        if (opportunityValue !== null && opportunityValue !== undefined && productValue !== null && productValue !== undefined) {
+            return new Promise(function (resolve) {
+            var req = new XMLHttpRequest();
+            req.open("GET", Xrm.Utility.getGlobalContext().getClientUrl() + "/api/data/v9.2/kofc_opportunityproductrelations?$select=_kofc_opportunity_value,_kofc_product_value&$filter=_kofc_opportunity_value eq" + opportunityValue, true);
+            req.setRequestHeader("OData-MaxVersion", "4.0");
+            req.setRequestHeader("OData-Version", "4.0");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Prefer", "odata.include-annotations=*");
+            req.onreadystatechange = function () {
+                if (this.readyState === 4) {
+                    req.onreadystatechange = null;
+                    if (this.status === 200) {
+                        var results = JSON.parse(this.response);
+                        //console.log(results);
+                        for (var i = 0; i < results.value.length; i++) {
+                            var result = results.value[i];
+                            var kofc_opportunity_formatted = result["_kofc_opportunity_value@OData.Community.Display.V1.FormattedValue"];
+                            var kofc_product_formatted = result["_kofc_product_value@OData.Community.Display.V1.FormattedValue"];
+                            if (kofc_product_formatted === productValue) {
+                                Xrm.Navigation.openAlertDialog(kofc_product_formatted + ' product is already added for ' + kofc_opportunity_formatted + '. Please select different product');
+                                //formContext.getAttribute('kofc_product').setValue(null);
+                                executionContext.getEventArgs().preventDefault();
+                            }
+                        }
+                    }
+                    else {
+                        Xrm.Navigation.openAlertDialog(this.responseText);
+                    }
+                    resolve();
+                }
+            };
+            req.send();
+            });
+        }
+    }
+    catch (error) {
+        Xrm.Navigation.openAlertDialog('addFilter Error: ' + (error.description || error.message));
+    }
+}
