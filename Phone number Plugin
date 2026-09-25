@@ -1,0 +1,423 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using Microsoft.Xrm.Sdk;
+using PhoneNumbers;
+
+namespace KofC.Plugins.Contact
+{
+    /// <summary>
+    /// Contact, Create and Update, PreOperation (20), Synchronous.
+    /// Update filtering attributes: telephone1, telephone2, mobilephone.
+    /// Update pre-image "PreImage": address1_country, telephone1, telephone2, mobilephone.
+    /// Unsecure configuration (optional): logical name of a boolean "needs review" column.
+    /// </summary>
+    public class ContactPhoneNormalizationPlugin : IPlugin
+    {
+        private const string PluginName = "ContactPhoneNormalizationPlugin";
+        private const string PreImageName = "PreImage";
+        private const string CountryField = "address1_country";
+        private static readonly string[] PhoneFields = { "telephone1", "telephone2", "mobilephone" };
+
+        // true = trace full phone numbers (DEV troubleshooting only); false = mask all but the last 4 digits.
+        private static readonly bool LogFullPhoneNumbers = false;
+
+        private readonly string reviewFlagField;
+
+        public ContactPhoneNormalizationPlugin(string unsecureConfig, string secureConfig)
+        {
+            reviewFlagField = string.IsNullOrWhiteSpace(unsecureConfig) ? null : unsecureConfig.Trim();
+        }
+
+        public void Execute(IServiceProvider serviceProvider)
+        {
+            var tracing = (ITracingService)serviceProvider.GetService(typeof(ITracingService));
+            var context = (IPluginExecutionContext)serviceProvider.GetService(typeof(IPluginExecutionContext));
+            var timer = Stopwatch.StartNew();
+
+            Log(tracing, "Start. Message={0}, Stage={1}, Mode={2}, Depth={3}, RecordId={4}, UserId={5}, CorrelationId={6}",
+                context.MessageName, context.Stage, context.Mode, context.Depth,
+                context.PrimaryEntityId, context.InitiatingUserId, context.CorrelationId);
+
+            try
+            {
+                if (context.Stage != 20 ||
+                    (context.MessageName != "Create" && context.MessageName != "Update") ||
+                    !context.InputParameters.Contains("Target"))
+                {
+                    Log(tracing, "Skipped: expected a PreOperation Create or Update with a Target.");
+                    return;
+                }
+                var target = context.InputParameters["Target"] as Entity;
+                if (target == null || target.LogicalName != "contact")
+                {
+                    Log(tracing, "Skipped: Target is not a contact ({0}).", target == null ? "null" : target.LogicalName);
+                    return;
+                }
+
+                var preImage = context.PreEntityImages.Contains(PreImageName) ? context.PreEntityImages[PreImageName] : null;
+                if (context.MessageName == "Update" && preImage == null)
+                {
+                    Log(tracing, "Warning: pre-image '{0}' is not registered; country and review flag use Target values only.", PreImageName);
+                }
+
+                var countryText = GetCurrentValue(target, preImage, CountryField);
+                var region = CountryResolver.Resolve(countryText);
+                Log(tracing, "Country '{0}' resolved to region {1}.", countryText ?? "(blank)", region ?? "none");
+
+                var phoneInTarget = false;
+                foreach (var field in PhoneFields)
+                {
+                    if (!target.Contains(field))
+                    {
+                        continue;
+                    }
+                    phoneInTarget = true;
+                    var value = target.GetAttributeValue<string>(field);
+                    if (string.IsNullOrWhiteSpace(value))
+                    {
+                        Log(tracing, "{0}: blank, nothing to normalize.", field);
+                        continue;
+                    }
+                    var result = PhoneNormalizer.Normalize(value, region);
+                    if (!result.IsValid)
+                    {
+                        Log(tracing, "{0}: '{1}' could not be normalized; left unchanged.", field, Mask(value));
+                        continue;
+                    }
+                    if (result.Stored == value)
+                    {
+                        Log(tracing, "{0}: '{1}' already normalized.", field, Mask(value));
+                        continue;
+                    }
+                    target[field] = result.Stored;
+                    Log(tracing, "{0}: '{1}' -> '{2}'.", field, Mask(value), Mask(result.Stored));
+                }
+
+                if (!phoneInTarget)
+                {
+                    Log(tracing, "No phone fields in Target; nothing to do.");
+                }
+                else if (reviewFlagField != null)
+                {
+                    var needsReview = NeedsReview(target, preImage, region);
+                    target[reviewFlagField] = needsReview;
+                    Log(tracing, "{0} set to {1}.", reviewFlagField, needsReview);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Fail open: never block a create/update (e.g. a Snowflake load) because of phone formatting.
+                Log(tracing, "Error, save continues without phone normalization: {0}", ex.ToString());
+            }
+            finally
+            {
+                Log(tracing, "End. Duration={0} ms.", timer.ElapsedMilliseconds);
+            }
+        }
+
+        private static bool NeedsReview(Entity target, Entity preImage, string region)
+        {
+            foreach (var field in PhoneFields)
+            {
+                var value = GetCurrentValue(target, preImage, field);
+                if (!string.IsNullOrWhiteSpace(value) && !PhoneNormalizer.Normalize(value, region).IsValid)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static string GetCurrentValue(Entity target, Entity preImage, string field)
+        {
+            if (target.Contains(field))
+            {
+                return target.GetAttributeValue<string>(field);
+            }
+            return preImage != null && preImage.Contains(field) ? preImage.GetAttributeValue<string>(field) : null;
+        }
+
+        // Masks all digits except the last 4, keeping formatting characters so the change is still visible.
+        private static string Mask(string value)
+        {
+            if (LogFullPhoneNumbers || string.IsNullOrEmpty(value))
+            {
+                return value;
+            }
+            var chars = value.ToCharArray();
+            var digitsSeen = 0;
+            for (var i = chars.Length - 1; i >= 0; i--)
+            {
+                if (char.IsDigit(chars[i]) && ++digitsSeen > 4)
+                {
+                    chars[i] = '*';
+                }
+            }
+            return new string(chars);
+        }
+
+        private static void Log(ITracingService tracing, string format, params object[] args)
+        {
+            if (tracing != null)
+            {
+                tracing.Trace(PluginName + ": " + format, args);
+            }
+        }
+    }
+
+    public sealed class PhoneResult
+    {
+        public bool IsValid { get; private set; }
+        public string Stored { get; private set; }
+
+        public static readonly PhoneResult Invalid = new PhoneResult { IsValid = false };
+
+        public static PhoneResult Valid(string stored)
+        {
+            return new PhoneResult { IsValid = true, Stored = stored };
+        }
+    }
+
+    public static class PhoneNormalizer
+    {
+        public const int MinDigits = 7;
+        private static readonly bool StrictValidation = false;
+
+        private const string UnknownRegion = "ZZ";
+        private static readonly PhoneNumberUtil Util = PhoneNumberUtil.GetInstance();
+        private static readonly Regex NonDigits = new Regex(@"\D", RegexOptions.Compiled);
+        private static readonly Regex NanpTollFree = new Regex(@"^1?(800|833|844|855|866|877|888)\d{7}$", RegexOptions.Compiled);
+        private static readonly Regex FirstLetter = new Regex(@"[a-z]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        public static PhoneResult Normalize(string value, string defaultRegion)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return PhoneResult.Invalid;
+            }
+            var text = value.Trim();
+            if (text.StartsWith("00", StringComparison.Ordinal))
+            {
+                text = "+" + text.Substring(2).Trim();
+            }
+            if (NonDigits.Replace(text, "").Length < MinDigits)
+            {
+                return PhoneResult.Invalid;
+            }
+            var phone = Parse(text, defaultRegion);
+            if (phone == null || !(StrictValidation ? Util.IsValidNumber(phone) : Util.IsPossibleNumber(phone)))
+            {
+                return PhoneResult.Invalid;
+            }
+            var stored = Util.Format(phone, PhoneNumberFormat.E164);
+            if (phone.HasExtension && !string.IsNullOrEmpty(phone.Extension))
+            {
+                stored += " x" + phone.Extension;
+            }
+            return PhoneResult.Valid(stored);
+        }
+
+        private static PhoneNumber Parse(string text, string defaultRegion)
+        {
+            if (text.StartsWith("+", StringComparison.Ordinal))
+            {
+                return TryParse(text, UnknownRegion);
+            }
+            var mainDigits = NonDigits.Replace(FirstLetter.Split(text)[0], "");
+            if (NanpTollFree.IsMatch(mainDigits))
+            {
+                return TryParse(text, "US");
+            }
+            var national = defaultRegion != null ? TryParse(text, defaultRegion) : null;
+            if (national != null && Util.IsValidNumber(national))
+            {
+                return national;
+            }
+            var international = TryParse("+" + text, UnknownRegion);
+            if (international != null && Util.IsValidNumber(international))
+            {
+                return international;
+            }
+            return national;
+        }
+
+        private static PhoneNumber TryParse(string text, string region)
+        {
+            try
+            {
+                return Util.Parse(text, region);
+            }
+            catch (NumberParseException)
+            {
+                return null;
+            }
+        }
+    }
+
+    // Mirrors the country lookup in kofc_ContactPhoneManager.js (ISO codes, English names, aliases).
+    public static class CountryResolver
+    {
+        private static readonly Regex NonLetters = new Regex(@"[^a-z]+", RegexOptions.Compiled);
+
+        private static readonly Dictionary<string, string> Names = new Dictionary<string, string>
+        {
+            { "ascension island", "AC" }, { "andorra", "AD" }, { "united arab emirates", "AE" },
+            { "afghanistan", "AF" }, { "antigua barbuda", "AG" }, { "anguilla", "AI" },
+            { "albania", "AL" }, { "armenia", "AM" }, { "angola", "AO" },
+            { "argentina", "AR" }, { "american samoa", "AS" }, { "austria", "AT" },
+            { "australia", "AU" }, { "aruba", "AW" }, { "aland islands", "AX" },
+            { "azerbaijan", "AZ" }, { "bosnia herzegovina", "BA" }, { "barbados", "BB" },
+            { "bangladesh", "BD" }, { "belgium", "BE" }, { "burkina faso", "BF" },
+            { "bulgaria", "BG" }, { "bahrain", "BH" }, { "burundi", "BI" },
+            { "benin", "BJ" }, { "st barthelemy", "BL" }, { "bermuda", "BM" },
+            { "brunei", "BN" }, { "bolivia", "BO" }, { "caribbean netherlands", "BQ" },
+            { "brazil", "BR" }, { "bahamas", "BS" }, { "bhutan", "BT" },
+            { "botswana", "BW" }, { "belarus", "BY" }, { "belize", "BZ" },
+            { "canada", "CA" }, { "cocos keeling islands", "CC" }, { "congo kinshasa", "CD" },
+            { "central african republic", "CF" }, { "congo brazzaville", "CG" }, { "switzerland", "CH" },
+            { "cote d ivoire", "CI" }, { "cook islands", "CK" }, { "chile", "CL" },
+            { "cameroon", "CM" }, { "china", "CN" }, { "colombia", "CO" },
+            { "costa rica", "CR" }, { "cuba", "CU" }, { "cape verde", "CV" },
+            { "curacao", "CW" }, { "christmas island", "CX" }, { "cyprus", "CY" },
+            { "czechia", "CZ" }, { "germany", "DE" }, { "djibouti", "DJ" },
+            { "denmark", "DK" }, { "dominica", "DM" }, { "dominican republic", "DO" },
+            { "algeria", "DZ" }, { "ecuador", "EC" }, { "estonia", "EE" },
+            { "egypt", "EG" }, { "western sahara", "EH" }, { "eritrea", "ER" },
+            { "spain", "ES" }, { "ethiopia", "ET" }, { "finland", "FI" },
+            { "fiji", "FJ" }, { "falkland islands", "FK" }, { "micronesia", "FM" },
+            { "faroe islands", "FO" }, { "france", "FR" }, { "gabon", "GA" },
+            { "united kingdom", "GB" }, { "grenada", "GD" }, { "georgia", "GE" },
+            { "french guiana", "GF" }, { "guernsey", "GG" }, { "ghana", "GH" },
+            { "gibraltar", "GI" }, { "greenland", "GL" }, { "gambia", "GM" },
+            { "guinea", "GN" }, { "guadeloupe", "GP" }, { "equatorial guinea", "GQ" },
+            { "greece", "GR" }, { "guatemala", "GT" }, { "guam", "GU" },
+            { "guinea bissau", "GW" }, { "guyana", "GY" }, { "hong kong sar china", "HK" },
+            { "honduras", "HN" }, { "croatia", "HR" }, { "haiti", "HT" },
+            { "hungary", "HU" }, { "indonesia", "ID" }, { "ireland", "IE" },
+            { "israel", "IL" }, { "isle of man", "IM" }, { "india", "IN" },
+            { "british indian ocean territory", "IO" }, { "iraq", "IQ" }, { "iran", "IR" },
+            { "iceland", "IS" }, { "italy", "IT" }, { "jersey", "JE" },
+            { "jamaica", "JM" }, { "jordan", "JO" }, { "japan", "JP" },
+            { "kenya", "KE" }, { "kyrgyzstan", "KG" }, { "cambodia", "KH" },
+            { "kiribati", "KI" }, { "comoros", "KM" }, { "st kitts nevis", "KN" },
+            { "north korea", "KP" }, { "south korea", "KR" }, { "kuwait", "KW" },
+            { "cayman islands", "KY" }, { "kazakhstan", "KZ" }, { "laos", "LA" },
+            { "lebanon", "LB" }, { "st lucia", "LC" }, { "liechtenstein", "LI" },
+            { "sri lanka", "LK" }, { "liberia", "LR" }, { "lesotho", "LS" },
+            { "lithuania", "LT" }, { "luxembourg", "LU" }, { "latvia", "LV" },
+            { "libya", "LY" }, { "morocco", "MA" }, { "monaco", "MC" },
+            { "moldova", "MD" }, { "montenegro", "ME" }, { "st martin", "MF" },
+            { "madagascar", "MG" }, { "marshall islands", "MH" }, { "north macedonia", "MK" },
+            { "mali", "ML" }, { "myanmar burma", "MM" }, { "mongolia", "MN" },
+            { "macao sar china", "MO" }, { "northern mariana islands", "MP" }, { "martinique", "MQ" },
+            { "mauritania", "MR" }, { "montserrat", "MS" }, { "malta", "MT" },
+            { "mauritius", "MU" }, { "maldives", "MV" }, { "malawi", "MW" },
+            { "mexico", "MX" }, { "malaysia", "MY" }, { "mozambique", "MZ" },
+            { "namibia", "NA" }, { "new caledonia", "NC" }, { "niger", "NE" },
+            { "norfolk island", "NF" }, { "nigeria", "NG" }, { "nicaragua", "NI" },
+            { "netherlands", "NL" }, { "norway", "NO" }, { "nepal", "NP" },
+            { "nauru", "NR" }, { "niue", "NU" }, { "new zealand", "NZ" },
+            { "oman", "OM" }, { "panama", "PA" }, { "peru", "PE" },
+            { "french polynesia", "PF" }, { "papua new guinea", "PG" }, { "philippines", "PH" },
+            { "pakistan", "PK" }, { "poland", "PL" }, { "st pierre miquelon", "PM" },
+            { "puerto rico", "PR" }, { "palestinian territories", "PS" }, { "portugal", "PT" },
+            { "palau", "PW" }, { "paraguay", "PY" }, { "qatar", "QA" },
+            { "reunion", "RE" }, { "romania", "RO" }, { "serbia", "RS" },
+            { "russia", "RU" }, { "rwanda", "RW" }, { "saudi arabia", "SA" },
+            { "solomon islands", "SB" }, { "seychelles", "SC" }, { "sudan", "SD" },
+            { "sweden", "SE" }, { "singapore", "SG" }, { "st helena", "SH" },
+            { "slovenia", "SI" }, { "svalbard jan mayen", "SJ" }, { "slovakia", "SK" },
+            { "sierra leone", "SL" }, { "san marino", "SM" }, { "senegal", "SN" },
+            { "somalia", "SO" }, { "suriname", "SR" }, { "south sudan", "SS" },
+            { "sao tome principe", "ST" }, { "el salvador", "SV" }, { "sint maarten", "SX" },
+            { "syria", "SY" }, { "eswatini", "SZ" }, { "tristan da cunha", "TA" },
+            { "turks caicos islands", "TC" }, { "chad", "TD" }, { "togo", "TG" },
+            { "thailand", "TH" }, { "tajikistan", "TJ" }, { "tokelau", "TK" },
+            { "timor leste", "TL" }, { "turkmenistan", "TM" }, { "tunisia", "TN" },
+            { "tonga", "TO" }, { "turkiye", "TR" }, { "trinidad tobago", "TT" },
+            { "tuvalu", "TV" }, { "taiwan", "TW" }, { "tanzania", "TZ" },
+            { "ukraine", "UA" }, { "uganda", "UG" }, { "united states", "US" },
+            { "uruguay", "UY" }, { "uzbekistan", "UZ" }, { "vatican city", "VA" },
+            { "st vincent grenadines", "VC" }, { "venezuela", "VE" }, { "british virgin islands", "VG" },
+            { "us virgin islands", "VI" }, { "vietnam", "VN" }, { "vanuatu", "VU" },
+            { "wallis futuna", "WF" }, { "samoa", "WS" }, { "kosovo", "XK" },
+            { "yemen", "YE" }, { "mayotte", "YT" }, { "south africa", "ZA" },
+            { "zambia", "ZM" }, { "zimbabwe", "ZW" },
+        };
+
+        private static readonly Dictionary<string, string> Aliases = new Dictionary<string, string>
+        {
+            { "usa", "US" }, { "us", "US" }, { "united states of america", "US" }, { "america", "US" },
+            { "uk", "GB" }, { "great britain", "GB" }, { "britain", "GB" }, { "england", "GB" },
+            { "scotland", "GB" }, { "wales", "GB" }, { "northern ireland", "GB" },
+            { "uae", "AE" }, { "south korea", "KR" }, { "korea", "KR" }, { "russia", "RU" },
+            { "czech republic", "CZ" }, { "holland", "NL" }, { "vietnam", "VN" }, { "ivory coast", "CI" }
+        };
+
+        private static readonly Dictionary<string, string> Lookup = BuildLookup();
+
+        public static string Resolve(string countryText)
+        {
+            if (string.IsNullOrWhiteSpace(countryText))
+            {
+                return null;
+            }
+            string code;
+            return Lookup.TryGetValue(NormalizeKey(countryText), out code) ? code : null;
+        }
+
+        public static string NormalizeKey(string text)
+        {
+            var decomposed = text.Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(decomposed.Length);
+            foreach (var c in decomposed)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(c);
+                }
+            }
+            var lower = builder.ToString().ToLowerInvariant().Replace(".", "");
+            return NonLetters.Replace(lower, " ").Trim();
+        }
+
+        private static Dictionary<string, string> BuildLookup()
+        {
+            var lookup = new Dictionary<string, string>();
+            foreach (var code in Names.Values.Distinct())
+            {
+                lookup[code.ToLowerInvariant()] = code;
+            }
+            foreach (var pair in Names)
+            {
+                lookup[pair.Key] = pair.Value;
+            }
+            foreach (var pair in Aliases)
+            {
+                lookup[pair.Key] = pair.Value;
+            }
+            return lookup;
+        }
+    }
+}
+
+//////////////////////////////////////
+
+registration details 
+
+Setting	Create step	Update step
+Message	Create	Update
+Primary Entity	contact	contact
+Filtering Attributes	(not available for Create)	telephone1, telephone2, mobilephone
+Event Pipeline Stage	PreOperation	PreOperation
+Execution Mode	Synchronous	Synchronous
+Deployment	Server	Server
+Run in User's Context	Calling User	Calling User
+Execution Order	1	1
+Unsecure Configuration	Optional: kofc_phonereviewrequired	Same as Create
+Pre-image	None	PreImage (see step 6)
