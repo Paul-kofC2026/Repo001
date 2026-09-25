@@ -262,3 +262,12 @@ var ContactPhoneManager = (function () {
         onSave: onSave
     };
 })();
+
+/////////////////////////////
+
+#	Where	Event	Function
+1	Form	On Load	ContactPhoneManager.onLoad
+2	Form	On Save	ContactPhoneManager.onSave
+3	Business Phone (telephone1)	On Change	ContactPhoneManager.onPhoneChange
+4	Home Phone (telephone2)	On Change	ContactPhoneManager.onPhoneChange
+5	Mobile Phone (mobilephone)	On Change	ContactPhoneManager.onPhoneChange
