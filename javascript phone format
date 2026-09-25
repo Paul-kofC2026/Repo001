@@ -1,336 +1,264 @@
-
-As a Customer Service User
-I want all phone number fields on Contact forms within the application to automatically apply a standardized phone number format
-So that contact information is entered, displayed, and maintained consistently across all user experiences, improving data quality and usability.
-CURRENT STATE:
-We are currently validating phone information using the following JS formula: 
-function OnChangePhoneNumber(executionContext, attributeSchema) {
+var ContactPhoneManager = (function () {
     "use strict";
-    try {
-        var formContext = executionContext.getFormContext();
-        var phoneNumberPattern = /^\(\d{3}\) \d{3}-\d{4}$/;
-        var phone = formContext.getAttribute(attributeSchema).getValue(); //get Phone value
-        formContext.getControl(attributeSchema).clearNotification("PhoneError");
-        if (phone !== null && !phoneNumberPattern.test(phone)) {
-            if (phone !== null && (phone.length < 10 || phone.length > 10 || isNaN(phone))) {
-                var tenDigitNumericValueKeyMessage = Xrm.Utility.getResourceString(Messages.Resource, Messages.TenDigitNumericValueKey);
-                formContext.getControl(attributeSchema).setNotification(tenDigitNumericValueKeyMessage, "PhoneError");//"Please enter 10-digit numeric value.", "PhoneError"             
+
+    const PHONE_FIELDS = [
+        "telephone1",   // Business Phone
+        "telephone2",   // Home Phone
+        "mobilephone"   // Mobile Phone
+    ];
+
+    const COUNTRY_FIELD = "address1_country";
+    const ERROR_ID = "PhoneValidation";
+    const ERROR_MESSAGE = "Phone number must contain a valid country code and telephone number.";
+    const MIN_DIGITS = 7;
+    const LOG_PREFIX = "ContactPhoneManager: ";
+    const FORMAT_ON_LOAD = true;      // false = show stored E.164 values as-is on load
+    const STRICT_VALIDATION = false;  // true = reject numbers invalid for their country
+    const FORM_TYPE_BULK_EDIT = 6;
+    const NANP_TOLL_FREE_REGEX = /^1?(800|833|844|855|866|877|888)\d{7}$/;
+
+    const COUNTRY_ALIASES = {
+        "usa": "US", "us": "US", "united states of america": "US", "america": "US",
+        "uk": "GB", "great britain": "GB", "britain": "GB", "england": "GB",
+        "scotland": "GB", "wales": "GB", "northern ireland": "GB",
+        "uae": "AE", "south korea": "KR", "korea": "KR", "russia": "RU",
+        "czech republic": "CZ", "holland": "NL", "vietnam": "VN", "ivory coast": "CI"
+    };
+
+    let countryLookup = null;
+
+    function onLoad(executionContext) {
+        try {
+            const formContext = executionContext.getFormContext();
+            if (!getLibrary()) {
+                console.warn(LOG_PREFIX + "libphonenumber is not loaded. Only the minimum-length check will run.");
             }
-            else {
-                formContext.getControl(attributeSchema).clearNotification("PhoneError");
-                formContext.getAttribute(attributeSchema).setValue("(" + phone.substr(0, 3) + ") " + phone.substr(3, 3) + "-" + phone.substr(6, phone.length));
+            if (!FORMAT_ON_LOAD || formContext.ui.getFormType() === FORM_TYPE_BULK_EDIT) {
+                return;
             }
+            applyDisplayFormat(formContext);
+            formContext.data.removeOnLoad(onDataLoad);
+            formContext.data.addOnLoad(onDataLoad);
+        } catch (error) {
+            logError("onLoad", error);
         }
     }
-    catch (error) {
-        Xrm.Navigation.openAlertDialog("Error At function OnChangePhoneNumber" + (error.description || error.message));
-    }
-}
 
-FUTURE STATE
-The future approach will involve developing a comprehensive contact phone number management strategy for each of this critical Phone Data fields available on the Contact Table: 
-Business Phone
-(schema: Telephone1)
-Home Phone 
-(schema: Telephone2)
-Mobile Phone
-(schema: MobilePhone)
-
-This strategy will consist of two main programs:
-     1. Contact Management Updates
-We will start by updating the rules for all incoming contact data from Snowflake to automatically convert these values upon contact create or update. 
-We also perform a full scale data clean up existing contact records to ensure we are adopting correct formatting for any existing contact records
-     2.  Contact Governance Updates
-
-Whenever user interacts with Contact Data within any MDA, we should apply consistent phone number formatting to each of the relevant Contact phone-related fields using custom Javascript
-This script will be designed to perform a couple key functions
-Display correctly formatted phone values at all times
-Convert user inputted values into proper E.164 values whenever a phone number update occurs within a Contact form directly
-
-Technical Design Details
-
-Technical Solution approach to implement this feature will be as follows:
-Phone Number Data Management
-Contact Integration Updates
-For any new contacts or updates to existing contacts for the below fields, we need to make sure that the phone value is stored in E.164 International Standard Phone Number Format
-Business Phone
-Mobile Phone
-Home Phone
-The above 3 fields should be the only ones that we considered as part of this update process
-As part of this update, the main step in the transformation will include updated the the existing phone value and then automatically adding the '+' sign as a prefix. (As required by the E.164 Format.)
-
-This format is generally understood to be as follows:
-
-"+" & Country Code + Area Code(if applicable) + Unique/Local Phone Digits
-
-Here are some examples of phone numbers before and after they have gone through undergone this conversion process: 
-
-
-Example 1: Phone Update(No Country)
-Original Value: 123-456-7890
-New Value: +123-456-7890
-Example 2: International Phone Number Update(Costa Rica-based) 
-Original Value: 506-7123-4567
-New Value: +50671234567
-
-North American Country Code Inclusion
-For any new contacts or updates for existing contacts for the below fields that have a Country of "US" or "Canada" then we should be automatically update the phone value to also include a "1" after the plus sign to properly designate the North American Country Code
-Business Phone
-Mobile Phone
-Home Phone
-Example 1: North America Phone Update
-Original Value: 224-522-1234
-New Value: +12245221234
-
-Existing Contact Updates
-Additionally, as part of this update process, we will need to modify the any existing values for our Phone Number field set within all active contacts for all relevant environments: 
-DEV
-TEST
-UAT2
-Production
-Phone Number Data Governance
-
-Form Behavior - Core Javascript Customization
-
-Here is a summary of the key requirements for the runtime function to govern how contact data entered via user input is processed within the system:
-
-Within UI, on any relevant contact forms, we will include a function to automatically take the E.164 Type Phone Raw Number stored in actual Table/Column and convert it to a properly formatted phone number
-This should automatically convert Country codes or any other phone number variations and render them as a formatted Phone Nmber elements. 
-If a user add a new phone value, the code should remove unnecessary characters during save process and automatically convert phone values entered by users into the above mentioned E.164 Format. 
-Here is a sample function of how this could be achieved:
-function normalizeAndFormatPhone(executionContext, fieldName) {
-    const formContext = executionContext.getFormContext();
-    const attribute = formContext.getAttribute(fieldName);
-
-    if (!attribute || !attribute.getValue()) {
-        return;
+    function onDataLoad(executionContext) {
+        try {
+            applyDisplayFormat(executionContext.getFormContext());
+        } catch (error) {
+            logError("onDataLoad", error);
+        }
     }
 
-    let phone = attribute.getValue().trim();
-
-    // Remove everything except digits
-    let digits = phone.replace(/\D/g, "");
-
-    // Assume US/Canada if only 10 digits entered
-    if (digits.length === 10) {
-        digits = "1" + digits;
+    function onPhoneChange(executionContext) {
+        try {
+            const formContext = executionContext.getFormContext();
+            const attribute = executionContext.getEventSource();
+            if (!attribute) {
+                return;
+            }
+            attribute.setSubmitMode("always");
+            clearFieldError(attribute);
+            const value = attribute.getValue();
+            if (!value) {
+                return;
+            }
+            const result = analyzePhone(value, getDefaultCountry(formContext));
+            if (!result.valid) {
+                setFieldError(attribute);
+                return;
+            }
+            if (result.display !== value) {
+                attribute.setValue(result.display);
+            }
+        } catch (error) {
+            logError("onPhoneChange", error);
+        }
     }
 
-    // Validate North American number
-    if (digits.length !== 11 || !digits.startsWith("1")) {
-        return;
+    function onSave(executionContext) {
+        try {
+            const formContext = executionContext.getFormContext();
+            const eventArgs = executionContext.getEventArgs();
+            const country = getDefaultCountry(formContext);
+            let hasErrors = false;
+            PHONE_FIELDS.forEach(function (fieldName) {
+                const attribute = formContext.getAttribute(fieldName);
+                if (!attribute ||
+                    attribute.getSubmitMode() === "never" ||
+                    !attribute.getIsDirty() ||
+                    !isEditable(attribute)) {
+                    return;
+                }
+                clearFieldError(attribute);
+                const value = attribute.getValue();
+                if (!value) {
+                    return;
+                }
+                const result = analyzePhone(value, country);
+                if (!result.valid) {
+                    setFieldError(attribute);
+                    hasErrors = true;
+                    return;
+                }
+                if (result.stored !== value) {
+                    attribute.setValue(result.stored);
+                }
+            });
+            if (hasErrors && eventArgs) {
+                eventArgs.preventDefault();
+            }
+        } catch (error) {
+            logError("onSave", error);
+        }
     }
 
-    // Store E.164 value
-    const e164 = "+" + digits;
-    attribute
+    function applyDisplayFormat(formContext) {
+        const country = getDefaultCountry(formContext);
+        PHONE_FIELDS.forEach(function (fieldName) {
+            const attribute = formContext.getAttribute(fieldName);
+            if (!attribute || (attribute.getIsDirty() && attribute.getSubmitMode() !== "never")) {
+                return;
+            }
+            clearFieldError(attribute);
+            const value = attribute.getValue();
+            if (!value) {
+                return;
+            }
+            const result = analyzePhone(value, country);
+            if (result.valid && result.display !== value) {
+                attribute.setValue(result.display);
+                attribute.setSubmitMode("never");
+            }
+        });
+    }
 
+    function analyzePhone(value, defaultCountry) {
+        let text = value.trim();
+        if (text.startsWith("00")) {
+            text = "+" + text.substring(2).trim();
+        }
+        if (text.replace(/\D/g, "").length < MIN_DIGITS) {
+            return { valid: false };
+        }
+        const lib = getLibrary();
+        if (!lib) {
+            return { valid: true, stored: value, display: value };
+        }
+        const phone = parsePhone(lib, text, defaultCountry);
+        if (!phone || !(STRICT_VALIDATION ? phone.isValid() : phone.isPossible())) {
+            return { valid: false };
+        }
+        const extension = phone.ext ? " x" + phone.ext : "";
+        return {
+            valid: true,
+            stored: phone.number + extension,
+            display: formatForDisplay(lib, phone) + extension
+        };
+    }
 
+    function parsePhone(lib, text, defaultCountry) {
+        if (text.startsWith("+")) {
+            return lib.parsePhoneNumberFromString(text) || null;
+        }
+        const mainDigits = text.split(/[a-z]/i)[0].replace(/\D/g, "");
+        if (NANP_TOLL_FREE_REGEX.test(mainDigits)) {
+            return lib.parsePhoneNumberFromString(text, "US") || null;
+        }
+        const national = defaultCountry ? lib.parsePhoneNumberFromString(text, defaultCountry) : undefined;
+        if (national && national.isValid()) {
+            return national;
+        }
+        const international = lib.parsePhoneNumberFromString("+" + text);
+        if (international && international.isValid()) {
+            return international;
+        }
+        return national || null;
+    }
 
-       2. Whenever the validation rule triggers, it should be able to accommodate any of the following phone number types
-1-800 Numbers
-Numbers containing a country code
-Any other common phone types
-       3. Solution should preserve ability for CSR's to initiate one-click phone calls still
-       4. Invalid Phone Numbers Error. If for any reason a user enters a phone number that meets any of the below criteria. Then should receive an error message              explaining the change that they need to make to resolve the field validation.
-Phone Number length is less than 7 characters.
-In this scenario, users should automatically be presented with an error that states: "Phone number must contain a valid country code and telephone number."
+    function formatForDisplay(lib, phone) {
+        const national = phone.nationalNumber;
+        if (phone.countryCallingCode === "1" && national.length === 10) {
+            return "+1 (" + national.substring(0, 3) + ") " + national.substring(3, 6) + "-" + national.substring(6);
+        }
+        return lib.parsePhoneNumberFromString(phone.number).formatInternational();
+    }
 
-/////////acceptance criteria
+    function getDefaultCountry(formContext) {
+        const lib = getLibrary();
+        const attribute = formContext.getAttribute(COUNTRY_FIELD);
+        if (!lib || !attribute || !attribute.getValue()) {
+            return null;
+        }
+        return getCountryLookup(lib)[normalizeCountryKey(attribute.getValue())] || null;
+    }
 
+    function getCountryLookup(lib) {
+        if (countryLookup) {
+            return countryLookup;
+        }
+        const lookup = {};
+        let displayNames = null;
+        try {
+            displayNames = new Intl.DisplayNames(["en"], { type: "region" });
+        } catch (error) {
+            displayNames = null;
+        }
+        lib.getCountries().forEach(function (code) {
+            lookup[code.toLowerCase()] = code;
+            const name = displayNames ? displayNames.of(code) : null;
+            if (name) {
+                lookup[normalizeCountryKey(name)] = code;
+            }
+        });
+        Object.keys(COUNTRY_ALIASES).forEach(function (alias) {
+            lookup[alias] = COUNTRY_ALIASES[alias];
+        });
+        countryLookup = lookup;
+        return countryLookup;
+    }
 
-AC1 – Supported Phone Fields
-Given a Contact record is created or updated through the Snowflake integration
-When phone data is received by Dynamics 365
-Then only the following Contact fields shall be evaluated and standardized:
+    function normalizeCountryKey(text) {
+        return String(text)
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/\./g, "")
+            .replace(/[^a-z]+/g, " ")
+            .trim();
+    }
 
-Business Phone (Telephone1)
-Home Phone (Telephone2)
-Mobile Phone (MobilePhone)
-And no other Contact phone-related fields shall be modified as part of this enhancement.
+    function getLibrary() {
+        return typeof libphonenumber !== "undefined" ? libphonenumber : null;
+    }
 
-AC2 – E.164 Storage Standard
-Given a value is received for Telephone1, Telephone2, or MobilePhone
-When the Contact record is created or updated
-Then the stored value shall be converted to E.164 format.
+    function isEditable(attribute) {
+        return attribute.controls.get().some(function (control) {
+            return control.getVisible() && !control.getDisabled();
+        });
+    }
 
-And the stored value shall follow the pattern:
+    function setFieldError(attribute) {
+        attribute.controls.forEach(function (control) {
+            control.setNotification(ERROR_MESSAGE, ERROR_ID);
+        });
+    }
 
+    function clearFieldError(attribute) {
+        attribute.controls.forEach(function (control) {
+            control.clearNotification(ERROR_ID);
+        });
+    }
 
+    function logError(handler, error) {
+        console.error(LOG_PREFIX + handler + " failed.", error);
+    }
 
-
-Plain Text
-+<CountryCode><PhoneNumber>
-``
-Show more lines
-Examples
-
-Incoming Value	Stored Value
-123-456-7890	+1234567890
-(123) 456-7890	+1234567890
-506-7123-4567	+50671234567
-AC3 – Removal of Non-Numeric Characters
-Given a phone number contains formatting characters
-When the integration processes the phone number
-Then all formatting characters shall be removed, including:
-
-Spaces
-Hyphens (-)
-Parentheses ()
-Periods (.)
-Any other non-numeric characters
-And the resulting value shall be stored in E.164 format.
-
-AC4 – North American Country Code Handling
-Given the Contact Country is United States or Canada
-And the phone number does not already contain a country code
-When the phone number is processed
-Then the system shall automatically prepend country code "1".
-
-Example
-
-Country	Incoming Value	Stored Value
-US	2245221234	+12245221234
-Canada	4165551234	+14165551234
-AC5 – Existing Contact Data Remediation
-Given active Contact records exist in the environment prior to deployment
-When the conversion process executes
-Then all existing values within Telephone1, Telephone2, and MobilePhone shall be converted to E.164 format.
-
-And the conversion process shall execute in:
-
-DEV
-TEST
-UAT2
-Production
-AC6 – Data Preservation
-Given an existing Contact contains a valid phone number
-When the data remediation process executes
-Then the numeric phone number shall be preserved.
-
-And only formatting changes required for E.164 compliance shall be applied.
-
-Contact Governance Updates
-Form Runtime Behavior
-AC7 – Display Formatting on Form Load
-Given a Contact record contains a phone number stored in E.164 format
-When a user opens a Contact form
-Then the phone number shall be rendered in a user-friendly format.
-
-And the raw Dataverse value shall remain unchanged.
-
-AC8 – Display Formatting After User Entry
-Given a user enters or updates a value in Telephone1, Telephone2, or MobilePhone
-When the field loses focus or the form refreshes
-Then the number shall immediately display using the standard phone format configured by the solution.
-
-AC9 – Automatic Normalization of User Input
-Given a CSR enters a phone number in any supported format
-
-Examples:
-
-
-
-
-Plain Text
-1234567890
-123-456-7890
-(123) 456-7890
-+1234567890
-+50671234567
-Show more lines
-When the record is saved
-
-Then the solution shall automatically:
-
-Remove formatting characters.
-Apply country code logic.
-Convert the value to E.164 format.
-Save the normalized value to Dataverse.
-AC10 – Support for International Phone Numbers
-Given a user enters a phone number that already contains a valid country code
-When the number is processed
-Then the country code shall be retained.
-
-And the phone number shall be stored in E.164 format.
-
-Example
-
-
-
-
-Plain Text
-Input: +50671234567
-Stored: +50671234567
-Show more lines
-AC11 – Support for Toll-Free Numbers
-Given a user enters a North American toll-free number
-
-Examples:
-
-
-
-
-Plain Text
-800
-833
-844
-855
-866
-877
-888
-Show more lines
-When the number is processed
-Then the number shall be considered valid.
-
-And it shall be converted to E.164 format.
-
-Example
-
-
-
-
-Plain Text
-8001112222
- 
-Show more lines
-Stored As:
-
-
-
-
-Plain Text
-+18001112222
- 
-Show more lines
-AC12 – One-Click Dialing Support
-Given a phone number is displayed on a Contact form
-When the user selects the phone number hyperlink or click-to-call control
-Then the dialing feature shall continue to function without modification to existing CSR processes.
-
-Validation Rules
-AC13 – Minimum Phone Number Length Validation
-Given a user enters a phone number containing fewer than seven numeric digits
-When validation executes
-Then the field shall fail validation.
-
-And the user shall receive the following error message:
-
-
-
-
-Plain Text
-Phone number must contain a valid country code and telephone number.
-Show more lines
-AC14 – Save Prevention for Invalid Numbers
-Given a phone number fails validation
-When the user attempts to save the Contact record
-Then the record shall not be saved.
-
-And the validation error shall remain visible until corrected.
-
-AC15 – Validation Message Removal
-Given a validation error is displayed
-When the user enters a valid phone number
-Then the validation message shall automatically be cleared.
-
+    return {
+        onLoad: onLoad,
+        onPhoneChange: onPhoneChange,
+        onSave: onSave
+    };
+})();
