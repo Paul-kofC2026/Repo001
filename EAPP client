@@ -1,0 +1,300 @@
+/*
+ * ============================================================================
+ * kofc_eappClient.js — EApp Boomi client (uses shared KOFC.Auth)
+ * ============================================================================
+ *
+ * Namespace: KOFC.Eapp
+ *
+ * Token acquisition: KOFC.Auth (kofc_authclient.js)
+ * Boomi call + open EApp: this file
+ *
+ * Identity: SPA token oid (Function resolves Dataverse user). Do NOT send userId.
+ *
+ * Prerequisites:
+ *   kofc_authclient.js
+ *   kofc_authcallback.html
+ *   kofc_msalbrowsermin
+ *
+ * Usage:
+ *   await KOFC.Eapp.configure({ tenantId, clientId, apiAppId, apiKey, boomiUrl, ... });
+ *   await KOFC.Eapp.openEapp(oppId, eappUrl);           // oppId optional
+ *   await KOFC.Eapp.callBoomiRaw(oppId);                // oppId optional
+ *   await KOFC.Eapp.callBoomi(primaryControl);          // ribbon
+ */
+(function (global) {
+    "use strict";
+
+    var AUTH_LIBRARY = "/WebResources/kofc_authclient.js";
+    var PENDING_KEY = "kofc_eapp_pending";
+
+    var CONFIG = {
+        tenantId: null,
+        clientId: null,
+        apiAppId: null,
+        apiKey: null,
+        boomiUrl: null,
+        scope: ".default",
+        httpMethod: "POST",
+        redirectWebResource: "kofc_authcallback.html",
+        msalWebResourcePath: "/WebResources/kofc_msalbrowsermin",
+        allowRedirect: true,
+        debug: false
+    };
+
+    function log() {
+        if (!CONFIG.debug || typeof console === "undefined") {
+            return;
+        }
+        var args = ["[KOFC.Eapp]"].concat(Array.prototype.slice.call(arguments));
+        console.log.apply(console, args);
+    }
+
+    function clientUrl() {
+        try {
+            if (global.Xrm && global.Xrm.Utility) {
+                return global.Xrm.Utility.getGlobalContext().getClientUrl();
+            }
+        } catch (e) { /* ignore */ }
+        return global.location.origin;
+    }
+
+    function requireConfig() {
+        var missing = [];
+        ["tenantId", "clientId", "apiAppId", "apiKey", "boomiUrl"].forEach(function (k) {
+            if (!CONFIG[k]) { missing.push(k); }
+        });
+        if (missing.length) {
+            throw new Error("KOFC.Eapp is not configured. Call configure() with: " + missing.join(", "));
+        }
+    }
+
+    function stripBraces(value) {
+        return String(value || "").replace(/[{}]/g, "").trim();
+    }
+
+    function apiScopes() {
+        return ["api://" + CONFIG.apiAppId + "/" + CONFIG.scope];
+    }
+
+    function ensureAuthClient() {
+        return new Promise(function (resolve, reject) {
+            if (global.KOFC && global.KOFC.Auth) {
+                resolve();
+                return;
+            }
+            var script = document.createElement("script");
+            script.src = clientUrl() + AUTH_LIBRARY;
+            script.onload = function () {
+                if (global.KOFC && global.KOFC.Auth) {
+                    resolve();
+                } else {
+                    reject(new Error("Auth client loaded but KOFC.Auth is undefined."));
+                }
+            };
+            script.onerror = function () {
+                reject(new Error("Failed to load auth client: " + script.src));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    function applyAuthConfig() {
+        global.KOFC.Auth.configure({
+            tenantId: CONFIG.tenantId,
+            clientId: CONFIG.clientId,
+            apiAppId: CONFIG.apiAppId,
+            apiKey: CONFIG.apiKey,
+            boomiUrl: CONFIG.boomiUrl,
+            scope: CONFIG.scope,
+            httpMethod: CONFIG.httpMethod,
+            redirectWebResource: CONFIG.redirectWebResource,
+            msalWebResourcePath: CONFIG.msalWebResourcePath,
+            allowRedirect: CONFIG.allowRedirect,
+            debug: CONFIG.debug
+        });
+    }
+
+    function getReturnUrl() {
+        try {
+            return window.top.location.href;
+        } catch (e) {
+            return window.location.href;
+        }
+    }
+
+    function persistPending(params) {
+        try {
+            localStorage.setItem(PENDING_KEY, JSON.stringify({
+                action: "eapp",
+                oppId: params.oppId || null,
+                eappUrl: params.eappUrl,
+                boomiUrl: CONFIG.boomiUrl,
+                httpMethod: CONFIG.httpMethod || "POST",
+                apiKey: CONFIG.apiKey,
+                apiScopes: apiScopes(),
+                returnUrl: getReturnUrl()
+            }));
+            log("Pending EApp request persisted", { oppId: params.oppId || null });
+        } catch (e) {
+            log("Failed to persist pending", e);
+        }
+    }
+
+    function clearPending() {
+        try {
+            localStorage.removeItem(PENDING_KEY);
+        } catch (e) { /* ignore */ }
+    }
+
+    function buildBoomiUrl(oppId) {
+        var base = CONFIG.boomiUrl;
+        if (!base) {
+            throw new Error("CONFIG.boomiUrl is required.");
+        }
+        if (!oppId) {
+            return base;
+        }
+        return base + (base.indexOf("?") >= 0 ? "&" : "?") + "oppID=" + encodeURIComponent(oppId);
+    }
+
+    async function callBoomiApi(token, oppId) {
+        var method = (CONFIG.httpMethod || "POST").toUpperCase();
+        var url = buildBoomiUrl(oppId);
+        log(method, url, { oppID: oppId || null });
+
+        var options = {
+            method: method,
+            headers: {
+                "Authorization": "Bearer " + token,
+                "Accept": "text/plain"
+            }
+        };
+        if (method !== "GET" && method !== "HEAD") {
+            options.headers["Content-Type"] = "application/json";
+            var body = {};
+            if (oppId) {
+                body.oppID = oppId;
+            }
+            options.body = JSON.stringify(body);
+        }
+
+        var response = await fetch(url, options);
+        var text = await response.text();
+        if (!response.ok) {
+            throw new Error("Boomi returned " + response.status + ": " + text);
+        }
+        return { status: response.status, body: text };
+    }
+
+    function configure(options) {
+        if (!options || typeof options !== "object") {
+            throw new Error("KOFC.Eapp.configure(options) requires an object.");
+        }
+        [
+            "tenantId", "clientId", "apiAppId", "apiKey", "boomiUrl",
+            "scope", "httpMethod", "redirectWebResource", "msalWebResourcePath",
+            "allowRedirect", "debug"
+        ].forEach(function (k) {
+            if (options[k] !== undefined) {
+                CONFIG[k] = options[k];
+            }
+        });
+        log("Configured");
+        return true;
+    }
+
+    /**
+     * Token -> Boomi -> open eappUrl?soreq=<base64>
+     * @param {string|null} oppId optional opportunity id
+     * @param {string} eappUrl EApp base URL
+     */
+    async function openEapp(oppId, eappUrl) {
+        requireConfig();
+        if (!eappUrl) {
+            throw new Error("openEapp requires the EApp base URL (kofc_EappURL).");
+        }
+        var oid = stripBraces(oppId);
+        await ensureAuthClient();
+        applyAuthConfig();
+        persistPending({ oppId: oid || null, eappUrl: eappUrl });
+
+        var token = await global.KOFC.Auth.getAccessToken();
+        if (!token) {
+            log("Redirect in progress — callback will finish");
+            return null;
+        }
+
+        var result = await callBoomiApi(token, oid || null);
+        clearPending();
+        var ssoUrl = eappUrl + "?soreq=" + result.body;
+        window.open(ssoUrl, "_blank");
+        return ssoUrl;
+    }
+
+    async function callBoomiRaw(oppId) {
+        requireConfig();
+        var oid = stripBraces(oppId);
+        await ensureAuthClient();
+        applyAuthConfig();
+        var token = await global.KOFC.Auth.getAccessToken();
+        if (!token) {
+            return null;
+        }
+        var result = await callBoomiApi(token, oid || null);
+        return result.body;
+    }
+
+    async function callBoomi(primaryControl) {
+        try {
+            requireConfig();
+            var oppId = "";
+            if (primaryControl && primaryControl.data && primaryControl.data.entity
+                && primaryControl.data.entity.getEntityName
+                && primaryControl.data.entity.getEntityName() === "opportunity") {
+                oppId = stripBraces(primaryControl.data.entity.getId());
+            }
+
+            await ensureAuthClient();
+            applyAuthConfig();
+            var token = await global.KOFC.Auth.getAccessToken();
+            if (!token) {
+                return null;
+            }
+            var result = await callBoomiApi(token, oppId || null);
+            if (global.Xrm && global.Xrm.Navigation) {
+                await global.Xrm.Navigation.openAlertDialog({
+                    title: "EApp SSO",
+                    text: "Boomi call succeeded (HTTP " + result.status + ")."
+                });
+            }
+            return result.body;
+        } catch (e) {
+            var message = (e && e.message) ? e.message : String(e);
+            if (global.Xrm && global.Xrm.Navigation) {
+                if (global.Xrm.Navigation.openErrorDialog) {
+                    global.Xrm.Navigation.openErrorDialog({ message: "Boomi call failed: " + message });
+                } else {
+                    global.Xrm.Navigation.openAlertDialog({ title: "EApp SSO - Error", text: message });
+                }
+            }
+            throw e;
+        }
+    }
+
+    function clearCache() {
+        clearPending();
+        if (global.KOFC && global.KOFC.Auth && global.KOFC.Auth.clearCache) {
+            return global.KOFC.Auth.clearCache();
+        }
+        return { message: "EApp cache cleared." };
+    }
+
+    global.KOFC = global.KOFC || {};
+    global.KOFC.Eapp = {
+        configure: configure,
+        openEapp: openEapp,
+        callBoomiRaw: callBoomiRaw,
+        callBoomi: callBoomi,
+        clearCache: clearCache
+    };
+})(typeof window !== "undefined" ? window : this);
