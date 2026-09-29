@@ -5,7 +5,10 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
 using PhoneNumbers;
 
 namespace KofC.Plugins.Contact
@@ -14,7 +17,8 @@ namespace KofC.Plugins.Contact
     /// Contact, Create and Update, PreOperation (20), Synchronous.
     /// Update filtering attributes: telephone1, telephone2, mobilephone.
     /// Update pre-image "PreImage": address1_country, telephone1, telephone2, mobilephone.
-    /// Unsecure configuration (optional): logical name of a boolean "needs review" column.
+    /// Unsecure configuration (optional): logical name of a Yes/No "needs review" column on contact.
+    /// Stores Telephone1, Telephone2 and MobilePhone in E.164; never blocks a save.
     /// </summary>
     public class ContactPhoneNormalizationPlugin : IPlugin
     {
@@ -27,6 +31,9 @@ namespace KofC.Plugins.Contact
         private static readonly bool LogFullPhoneNumbers = false;
 
         private readonly string reviewFlagField;
+
+        // 0 = not checked yet, 1 = column exists and is Yes/No, 2 = unusable (checked once per plugin instance).
+        private int reviewFlagState;
 
         public ContactPhoneNormalizationPlugin(string unsecureConfig, string secureConfig)
         {
@@ -102,7 +109,7 @@ namespace KofC.Plugins.Contact
                 {
                     Log(tracing, "No phone fields in Target; nothing to do.");
                 }
-                else if (reviewFlagField != null)
+                else if (IsReviewFlagUsable(serviceProvider, tracing))
                 {
                     var needsReview = NeedsReview(target, preImage, region);
                     target[reviewFlagField] = needsReview;
@@ -118,6 +125,50 @@ namespace KofC.Plugins.Contact
             {
                 Log(tracing, "End. Duration={0} ms.", timer.ElapsedMilliseconds);
             }
+        }
+
+        // Setting a column that doesn't exist (or isn't Yes/No) would fail the save, so verify it once first.
+        private bool IsReviewFlagUsable(IServiceProvider serviceProvider, ITracingService tracing)
+        {
+            if (reviewFlagField == null)
+            {
+                return false;
+            }
+            var state = Volatile.Read(ref reviewFlagState);
+            if (state == 1)
+            {
+                return true;
+            }
+            if (state == 2)
+            {
+                Log(tracing, "Review flag '{0}' is disabled (column missing or not Yes/No).", reviewFlagField);
+                return false;
+            }
+
+            var usable = false;
+            try
+            {
+                var factory = (IOrganizationServiceFactory)serviceProvider.GetService(typeof(IOrganizationServiceFactory));
+                var service = factory.CreateOrganizationService(null);
+                var response = (RetrieveAttributeResponse)service.Execute(new RetrieveAttributeRequest
+                {
+                    EntityLogicalName = "contact",
+                    LogicalName = reviewFlagField,
+                    RetrieveAsIfPublished = false
+                });
+                usable = response.AttributeMetadata != null && response.AttributeMetadata.AttributeType == AttributeTypeCode.Boolean;
+                if (!usable)
+                {
+                    Log(tracing, "Warning: review flag column '{0}' is not a Yes/No column; review flag disabled.", reviewFlagField);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log(tracing, "Warning: review flag column '{0}' could not be verified ({1}); review flag disabled.", reviewFlagField, ex.Message);
+            }
+
+            Volatile.Write(ref reviewFlagState, usable ? 1 : 2);
+            return usable;
         }
 
         private static bool NeedsReview(Entity target, Entity preImage, string region)
@@ -405,19 +456,3 @@ namespace KofC.Plugins.Contact
         }
     }
 }
-
-//////////////////////////////////////
-
-registration details 
-
-Setting	Create step	Update step
-Message	Create	Update
-Primary Entity	contact	contact
-Filtering Attributes	(not available for Create)	telephone1, telephone2, mobilephone
-Event Pipeline Stage	PreOperation	PreOperation
-Execution Mode	Synchronous	Synchronous
-Deployment	Server	Server
-Run in User's Context	Calling User	Calling User
-Execution Order	1	1
-Unsecure Configuration	Optional: kofc_phonereviewrequired	Same as Create
-Pre-image	None	PreImage (see step 6)
