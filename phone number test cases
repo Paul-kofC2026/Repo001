@@ -1,0 +1,75 @@
+Here are the form test cases, organized so you can run them in order and record results. Unless stated otherwise, set the contact's **Country** first, then enter the phone in **Business Phone**. "Blank" means Country is empty. Check **saved** values in a view or Advanced Find, not on the form, since the form always shows the formatted version.
+
+**Setup checks**
+
+| ID | AC | Steps | Expected result |
+|---|---|---|---|
+| S1 | — | Open any contact; in the console (ClientApiWrapper frame) look for `ContactPhoneManager:` messages | No `libphonenumber is not loaded` warning, no errors |
+| S2 | — | Open a contact with Power Apps Monitor running | `ContactPhoneManager.onLoad` runs without an error |
+
+**Form load (display only)**
+
+| ID | AC | Precondition | Steps | Expected result |
+|---|---|---|---|---|
+| L1 | AC7 | Stored `+12245221234` | Open the contact | Shows `+1 (224) 522-1234` |
+| L2 | AC7 | Stored `+442079460958` | Open the contact | Shows `+44 20 7946 0958` |
+| L3 | AC7 | Stored `+12245221234` | Open, change nothing, run `Xrm.Page.data.entity.getIsDirty()`, then navigate away | Returns `false`; no unsaved-changes prompt. If `true`, set `FORMAT_ON_LOAD = false` |
+| L4 | AC7 | Stored `+12245221234` | Change Job Title only, run `Xrm.Page.data.entity.getDataXml()` | Only Job Title is in the XML; phone fields aren't sent |
+| L5 | AC7 | Stored `+12245221234` | Change Job Title, save, check the stored phone | Still `+12245221234` |
+
+**Valid entry: displayed and saved values**
+
+| ID | AC | Country | Enter | Displays after tabbing out | Saved value |
+|---|---|---|---|---|---|
+| V1 | AC8, AC9 | United States | `224-522-1234` | `+1 (224) 522-1234` | `+12245221234` |
+| V2 | AC9 | USA | `(224) 522-1234` | `+1 (224) 522-1234` | `+12245221234` |
+| V3 | AC9 | United States | `2245221234` | `+1 (224) 522-1234` | `+12245221234` |
+| V4 | AC4 | Canada | `4165551234` | `+1 (416) 555-1234` | `+14165551234` |
+| V5 | AC10 | Blank | `+50671234567` | `+506 7123 4567` | `+50671234567` |
+| V6 | AC10 | Blank | `506-7123-4567` | `+506 7123 4567` | `+50671234567` |
+| V7 | AC10 | Costa Rica | `7123 4567` | `+506 7123 4567` | `+50671234567` |
+| V8 | AC10 | U.K. | `020 7946 0958` | `+44 20 7946 0958` | `+442079460958` |
+| V9 | AC10 | Blank | `0044 20 7946 0958` | `+44 20 7946 0958` | `+442079460958` |
+| V10 | AC10 | Côte d'Ivoire | `+91 98765 43210` | `+91 98765 43210` | `+919876543210` |
+| V11 | AC11 | Blank | `8001112222` | `+1 (800) 111-2222` | `+18001112222` |
+| V12 | AC11 | United Kingdom | `888-555-1234` | `+1 (888) 555-1234` | `+18885551234` |
+| V13 | — | US | `224-522-1234 x55` | `+1 (224) 522-1234 x55` | `+12245221234 x55` |
+
+Repeat V1 in **Home Phone** and **Mobile Phone** to confirm all three fields behave the same.
+
+**Invalid entry: error and blocked save**
+
+Each should show *"Phone number must contain a valid country code and telephone number."* on the field, and clicking Save should be blocked.
+
+| ID | AC | Country | Enter | Reason |
+|---|---|---|---|---|
+| I1 | AC13 | Blank | `12345` | Fewer than 7 digits |
+| I2 | AC13, AC14 | United States | `555-12` | Fewer than 7 digits |
+| I3 | AC4 | Blank | `2245221234` | No country code, and no Country to infer it |
+| I4 | — | Blank | `7123 4567` | Same, for a non-US number |
+| I5 | — | Blank | `123-456-7890` | Not a real number with any country code |
+| I6 | — | Blank | `+1234567890` | Too short for a +1 number |
+| I7 | — | United States | `abc-defg` | No digits |
+
+**Error clearing and save flow**
+
+| ID | AC | Steps | Expected result |
+|---|---|---|---|
+| E1 | AC15 | Country US: enter `12345`, then change to `224-522-1234` | Error appears, then clears immediately |
+| E2 | AC14 | Enter `12345`, click Save | Save blocked; error stays visible until corrected |
+| E3 | AC8 | Save a valid number and stay on the form | Field shows the formatted version again after save |
+| E4 | — | Clear an existing phone number and save | Saves as empty, no error |
+| E5 | — | Contact with an old invalid phone (e.g. `555-1234`): change only Job Title and save | Save succeeds; the untouched phone doesn't block it |
+| E6 | — | Country blank: enter `7123 4567` (error), set Country to Costa Rica, re-enter the number | Error clears; shows `+506 7123 4567` |
+
+**Other forms and conditions**
+
+| ID | AC | Steps | Expected result |
+|---|---|---|---|
+| F1 | AC12 | Click a formatted phone number | Click-to-call opens the dialer as before |
+| F2 | — | Repeat V1 and I1 on every Contact form, including Quick Create | Same results on each form |
+| F3 | — | Repeat V1 and I1 in the mobile app | Same results |
+| F4 | — | Bulk edit two contacts and set a phone | No errors on open; entry is validated and formatted |
+| F5 | — | User with read-only phone fields saves a contact that has an old invalid phone | Save succeeds; no blocking error |
+
+Run L3 first, because its result decides the `FORMAT_ON_LOAD` setting. If a case fails, capture the console output or Monitor trace before changing anything.
