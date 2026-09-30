@@ -1,0 +1,374 @@
+/*
+ * kofc_blobClient.js — SaaS blob opener (MSAL + Boomi + GetSaasBlobUrl)
+ *
+ * Browser sends path + contactId to Boomi (no userId — Boomi derives user from token oid).
+ * Boomi calls Function with client-credentials token + userId/oid.
+ * Returns { sasUrl } and opens the file.
+ *
+ * Solution checker (web-avoid-window-top): no top-window access. The post-sign-in
+ * return URL comes from the caller (params.returnUrl), the direct same-origin
+ * parent (main.aspx shell), or the current app URL from Xrm.
+ */
+(function (global) {
+    "use strict";
+
+    var AUTH_LIBRARY = "/WebResources/kofc_authclient.js";
+    var PENDING_KEY = "kofc_blob_pending";
+    var RESULT_KEY = "kofc_blob_result";
+
+    var CONFIG = {
+        tenantId: null,
+        clientId: null,
+        apiAppId: null,
+        boomiUrl: null,
+        scope: ".default",
+        httpMethod: "POST",
+        redirectWebResource: "kofc_authcallback.html",
+        msalWebResourcePath: "/WebResources/kofc_msalbrowsermin",
+        allowRedirect: true,
+        debug: false
+    };
+
+    function log() {
+        if (!CONFIG.debug) {
+            return;
+        }
+        var args = ["[KOFC.Blob]"].concat(Array.prototype.slice.call(arguments));
+        if (typeof console !== "undefined" && console.log) {
+            console.log.apply(console, args);
+        }
+    }
+
+    function clientUrl() {
+        try {
+            if (typeof Xrm !== "undefined" && Xrm.Utility) {
+                return Xrm.Utility.getGlobalContext().getClientUrl();
+            }
+        } catch (e) {
+            // ignore
+        }
+        try {
+            if (typeof parent !== "undefined" && parent.Xrm && parent.Xrm.Utility) {
+                return parent.Xrm.Utility.getGlobalContext().getClientUrl();
+            }
+        } catch (e2) {
+            // ignore
+        }
+        return window.location.origin;
+    }
+
+    function apiScopes() {
+        return ["api://" + CONFIG.apiAppId + "/" + CONFIG.scope];
+    }
+
+    function requireConfig() {
+        var missing = [];
+        if (!CONFIG.tenantId) { missing.push("tenantId"); }
+        if (!CONFIG.clientId) { missing.push("clientId"); }
+        if (!CONFIG.apiAppId) { missing.push("apiAppId"); }
+        if (!CONFIG.boomiUrl) { missing.push("boomiUrl"); }
+        if (missing.length > 0) {
+            throw new Error("KOFC.Blob is not configured. Missing: " + missing.join(", "));
+        }
+    }
+
+    function ensureAuthClient() {
+        return new Promise(function (resolve, reject) {
+            if (global.KOFC && global.KOFC.Auth) {
+                resolve();
+                return;
+            }
+            var script = document.createElement("script");
+            script.src = clientUrl() + AUTH_LIBRARY;
+            script.onload = function () {
+                if (global.KOFC && global.KOFC.Auth) {
+                    resolve();
+                } else {
+                    reject(new Error("Auth client loaded but KOFC.Auth is undefined."));
+                }
+            };
+            script.onerror = function () {
+                reject(new Error("Failed to load auth client: " + script.src));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    function applyAuthConfig() {
+        global.KOFC.Auth.configure({
+            tenantId: CONFIG.tenantId,
+            clientId: CONFIG.clientId,
+            apiAppId: CONFIG.apiAppId,
+            boomiUrl: CONFIG.boomiUrl,
+            scope: CONFIG.scope,
+            httpMethod: CONFIG.httpMethod,
+            redirectWebResource: CONFIG.redirectWebResource,
+            msalWebResourcePath: CONFIG.msalWebResourcePath,
+            allowRedirect: CONFIG.allowRedirect,
+            debug: CONFIG.debug
+        });
+    }
+
+    // Direct parent only, and only when it is a different, same-origin frame.
+    // Never walks past the direct parent (solution checker: web-avoid-window-top).
+    function getSameOriginParent() {
+        try {
+            if (global.parent && global.parent !== global) {
+                // Touching location throws if the parent is cross-origin.
+                void global.parent.location.href;
+                return global.parent;
+            }
+        } catch (e) { /* cross-origin parent */ }
+        return null;
+    }
+
+    function isMainAspx(loc) {
+        try {
+            return /\/main\.aspx$/i.test(loc.pathname);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function currentAppUrl() {
+        try {
+            var xrm = (typeof Xrm !== "undefined" && Xrm.Utility) ? Xrm : null;
+            if (!xrm) {
+                var p = getSameOriginParent();
+                xrm = (p && p.Xrm && p.Xrm.Utility) ? p.Xrm : null;
+            }
+            if (xrm) {
+                var ctx = xrm.Utility.getGlobalContext();
+                return ctx.getCurrentAppUrl ? ctx.getCurrentAppUrl() : null;
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+
+    /**
+     * Where the auth callback should send the user after an MSAL redirect.
+     * 1. Explicit returnUrl from the caller
+     * 2. This window, if it is main.aspx
+     * 3. Direct same-origin parent, if it is the main.aspx shell
+     *    (kofc_blob_open.html opened via main.aspx?pagetype=webresource&data=...)
+     * 4. Current app URL from Xrm
+     * 5. This window's own URL
+     */
+    function getReturnUrl(explicitUrl) {
+        if (explicitUrl) {
+            return explicitUrl;
+        }
+        if (isMainAspx(global.location)) {
+            return global.location.href;
+        }
+        var p = getSameOriginParent();
+        if (p) {
+            try {
+                if (isMainAspx(p.location)) {
+                    return p.location.href;
+                }
+            } catch (e) { /* ignore */ }
+        }
+        return currentAppUrl() || global.location.href;
+    }
+
+    function stripBraces(value) {
+        return String(value || "").replace(/[{}]/g, "");
+    }
+
+    function normalizeBlobPath(value) {
+        var path = String(value || "");
+        path = path.replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ").replace(/\u00a0/g, " ");
+        path = path.replace(/<br\s*\/?>/gi, "");
+        path = path.replace(/<[^>]+>/g, "");
+        path = path.replace(/\+/g, " ");
+        if (/%[0-9A-Fa-f]{2}/.test(path)) {
+            try {
+                path = decodeURIComponent(path);
+            } catch (e) { /* keep plus-decoded value */ }
+        }
+        return path.replace(/[\t\r\n]+/g, " ").trim();
+    }
+
+    // Match the Boomi Integration Validator: encodeURI (not encodeURIComponent).
+    // "D:\KOFCEXT Extractions\..." → "D:%5CKOFCEXT%20Extractions%5C..."
+    function encodePathForBoomi(value) {
+        return encodeURI(normalizeBlobPath(value));
+    }
+
+    function persistPending(params) {
+        try {
+            localStorage.setItem(PENDING_KEY, JSON.stringify({
+                action: "blob",
+                path: normalizeBlobPath(params.path),
+                contactId: stripBraces(params.contactId),
+                boomiUrl: CONFIG.boomiUrl,
+                httpMethod: "POST",
+                apiScopes: apiScopes(),
+                returnUrl: getReturnUrl(params.returnUrl)
+            }));
+        } catch (e) {
+            log("Failed to persist pending blob request", e);
+        }
+    }
+
+    function clearPending() {
+        try {
+            localStorage.removeItem(PENDING_KEY);
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    function buildBlobUrl(params) {
+        var base = CONFIG.boomiUrl;
+        var parts = [
+            "path=" + encodeURIComponent(params.path),
+            "contactId=" + encodeURIComponent(stripBraces(params.contactId)),
+            "format=json"
+        ];
+        return base + (base.indexOf("?") >= 0 ? "&" : "?") + parts.join("&");
+    }
+
+    function downloadFromPayload(data) {
+        if (data && data.contentBase64 && data.fileName) {
+            var binary = atob(data.contentBase64);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            var blob = new Blob([bytes], { type: data.contentType || "application/octet-stream" });
+            var objectUrl = URL.createObjectURL(blob);
+            var link = document.createElement("a");
+            link.href = objectUrl;
+            link.download = data.fileName;
+            link.rel = "noopener";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
+            return true;
+        }
+        var sasUrl = data && (data.sasUrl || data.SasUrl);
+        if (sasUrl) {
+            window.location.href = sasUrl;
+            return true;
+        }
+        return false;
+    }
+
+    function parseResponseBody(text) {
+        if (!text) {
+            return null;
+        }
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            return { sasUrl: text };
+        }
+    }
+
+    function callBlobBoomi(token, params) {
+        // The Blob Boomi operation is POST-only. Do not allow stale/shared
+        // configuration to switch this request back to GET.
+        var method = "POST";
+        var base = CONFIG.boomiUrl;
+        var url = base;
+        var options = {
+            method: method,
+            headers: {
+                "Authorization": "Bearer " + token,
+                "Accept": "application/json"
+            }
+        };
+
+        var payload = {
+            path: encodePathForBoomi(params.path),
+            contactId: stripBraces(params.contactId),
+            format: "file"
+        };
+
+        if (method === "GET" || method === "HEAD") {
+            var parts = [
+                "path=" + encodeURIComponent(payload.path),
+                "contactId=" + encodeURIComponent(payload.contactId),
+                "format=json"
+            ];
+            url = base + (base.indexOf("?") >= 0 ? "&" : "?") + parts.join("&");
+        } else {
+            options.headers["Content-Type"] = "application/json";
+            options.body = JSON.stringify(payload);
+        }
+
+        return fetch(url, options).then(function (response) {
+            return response.text().then(function (text) {
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    data: parseResponseBody(text),
+                    raw: text,
+                    redirecting: false
+                };
+            });
+        });
+    }
+
+    function configure(options) {
+        if (!options || typeof options !== "object") {
+            throw new Error("KOFC.Blob.configure(options) requires an object.");
+        }
+        Object.keys(options).forEach(function (key) {
+            if (options[key] !== undefined) {
+                CONFIG[key] = options[key];
+            }
+        });
+    }
+
+    function consumePendingResult() {
+        try {
+            var raw = localStorage.getItem(RESULT_KEY);
+            if (!raw) {
+                return null;
+            }
+            localStorage.removeItem(RESULT_KEY);
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function openSaasBlob(params) {
+        requireConfig();
+        if (!params || !params.path || !params.contactId) {
+            return Promise.reject(new Error("openSaasBlob requires path and contactId."));
+        }
+
+        return ensureAuthClient().then(function () {
+            applyAuthConfig();
+            persistPending(params);
+            return global.KOFC.Auth.getAccessToken();
+        }).then(function (token) {
+            if (!token) {
+                return { ok: false, status: 0, data: null, raw: "", redirecting: true };
+            }
+            return callBlobBoomi(token, params).then(function (result) {
+                clearPending();
+                if (!result.ok) {
+                    return result;
+                }
+                if (!downloadFromPayload(result.data)) {
+                    throw new Error("Boomi response did not include file content or sasUrl.");
+                }
+                return result;
+            });
+        });
+    }
+
+    global.KOFC = global.KOFC || {};
+    global.KOFC.Blob = {
+        configure: configure,
+        openSaasBlob: openSaasBlob,
+        consumePendingResult: consumePendingResult,
+        openFilePayload: downloadFromPayload
+    };
+})(typeof window !== "undefined" ? window : this);
