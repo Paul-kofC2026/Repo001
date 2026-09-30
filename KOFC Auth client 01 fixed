@@ -1,0 +1,744 @@
+/*
+ * KOFC.Auth — shared MSAL token client for Dynamics 365 integrations.
+ *
+ * Shared by EApp, Policy Non-Header, Blob, and future callers.
+ * Does NOT call Boomi. Does not send userId. Function identity = SPA token oid.
+ *
+ * Public API:
+ *   KOFC.Auth.configure(options)
+ *   KOFC.Auth.getAccessToken()
+ *   KOFC.Auth.clearCache()
+ *   KOFC.Auth.getLogs() / dumpLogs() / clearLogs()
+ *
+ * Integration Boomi clients:
+ *   kofc_eappClient.js   (KOFC.Eapp)
+ *   kofc_policyClient.js (KOFC.Policy)
+ *   kofc_blobClient.js   (KOFC.Blob)
+ *
+ * Prerequisites: kofc_msalbrowsermin, kofc_authcallback.html
+ *
+ * Solution checker (web-avoid-window-top): no top-window access. Xrm and the
+ * return URL come from the direct same-origin parent (main.aspx shell); the
+ * interactive sign-in redirect uses the "_top" navigation target.
+ */
+var KOFC = KOFC || {};
+
+KOFC.Auth = (function () {
+    "use strict";
+
+    // CONFIG holds ONLY generic, non-identity operational defaults so this file stays reusable
+    // across orgs/buttons. All caller-specific values (tenantId, clientId, apiAppId, boomiUrl,
+    // apiKey) are NULL here and MUST be supplied by KOFC.Auth.configure({...}) before use.
+    // getAccessToken throws if tenantId/clientId/apiAppId are missing.
+    var CONFIG = {
+        // --- Required per caller; provide via configure() ---
+        tenantId: null,
+        clientId: null,
+        apiAppId: null,
+        boomiUrl: null,
+        apiKey: null,
+
+        // --- Generic defaults (override via configure() if needed) ---
+        scope: ".default",
+        httpMethod: "POST",
+        // MSAL redirect page (Entra SPA redirect URI). Set redirectUri to override the
+        // "<origin>/WebResources/<redirectWebResource>" default. Case-sensitive in Entra.
+        redirectUri: null,
+        redirectWebResource: "kofc_authcallback.html",
+        // D365 web resource name for the MSAL library (case-sensitive, no extension).
+        msalWebResourcePath: "/WebResources/kofc_msalbrowsermin",
+        // false = never show popup/redirect UI; fails with a clear message if silent auth can't complete.
+        allowInteractive: false,
+        // true = when silent (cache + ssoSilent) fails, do a FULL-PAGE redirect to Microsoft
+        // sign-in (like kofc_BoomiIntegrationValidator). The callback page reads the code via
+        // handleRedirectPromise and finishes the flow, so the next click is silent.
+        allowRedirect: true,
+        // Structured console logging for troubleshooting; enable via configure({ debug: true }).
+        debug: false,
+        // Max in-memory log entries kept for getLogs() / dumpLogs().
+        logBufferSize: 100,
+        // MSAL hidden-iframe timeouts (ms); raised above MSAL's ~6s default for slow D365 loads.
+        iframeHashTimeout: 12000,
+        loadFrameTimeout: 12000,
+        // How many times to retry ssoSilent on a transient timed_out before giving up.
+        ssoSilentRetries: 1
+    };
+
+    // Throws a clear error if required, caller-supplied config is missing (i.e. configure()
+    // was not called or was incomplete). Keeps failures obvious instead of cryptic MSAL errors.
+    function requireConfig() {
+        var missing = [];
+        if (!CONFIG.tenantId) { missing.push("tenantId"); }
+        if (!CONFIG.clientId) { missing.push("clientId"); }
+        if (!CONFIG.apiAppId) { missing.push("apiAppId"); }
+        if (missing.length > 0) {
+            throw new Error(
+                "KOFC.Auth is not configured. Call KOFC.Auth.configure({ ... }) with: "
+                + missing.join(", ") + " before use."
+            );
+        }
+    }
+
+    var LOG_PREFIX = "[KOFC.Auth]";
+    var logBuffer = [];
+    var correlationId = null;
+
+    var msalApp = null;
+    var msalLoad = null;
+    var msalInitPromise = null;
+    var tokenInProgress = null;
+
+    function newCorrelationId() {
+        return "auth-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    }
+
+    function log(level, step, data) {
+        if (!CONFIG.debug && level !== "error") {
+            return;
+        }
+        var entry = {
+            ts: new Date().toISOString(),
+            level: level,
+            corr: correlationId,
+            step: step,
+            data: data || null
+        };
+        try {
+            logBuffer.push(entry);
+            while (logBuffer.length > (CONFIG.logBufferSize || 100)) {
+                logBuffer.shift();
+            }
+        } catch (e) {
+            // ignore buffer errors
+        }
+
+        if (typeof console === "undefined") {
+            return;
+        }
+        var line = LOG_PREFIX + " " + level.toUpperCase() + " " + step
+            + (correlationId ? " corr=" + correlationId : "");
+        var fn = console.log;
+        if (level === "error" && console.error) {
+            fn = console.error;
+        } else if (level === "warn" && console.warn) {
+            fn = console.warn;
+        } else if (level === "info" && console.info) {
+            fn = console.info;
+        }
+        if (data !== undefined && data !== null) {
+            fn.call(console, line, data);
+        } else {
+            fn.call(console, line);
+        }
+    }
+
+    function getLogs() {
+        return logBuffer.slice();
+    }
+
+    function clearLogs() {
+        logBuffer = [];
+        log("info", "logs.cleared", null);
+        return { message: "Log buffer cleared." };
+    }
+
+    function dumpLogs() {
+        var copy = getLogs();
+        if (typeof console !== "undefined" && console.log) {
+            console.log(LOG_PREFIX + " dump (" + copy.length + " entries)");
+            console.log(JSON.stringify(copy, null, 2));
+        }
+        return copy;
+    }
+
+    function origin() {
+        return window.location.origin;
+    }
+
+    function getRedirectUri() {
+        return CONFIG.redirectUri
+            || (origin() + "/WebResources/" + CONFIG.redirectWebResource);
+    }
+
+    var MSAL_CFG_KEY = "kofc_eapp_msal_cfg"; // read by kofc_authcallback.html
+
+    // A page is framed (at any depth) exactly when its parent is not itself.
+    // Never throws, even when the parent is cross-origin.
+    function isFramed() {
+        return window.parent !== window;
+    }
+
+    // Direct parent only, and only when it is a different, same-origin frame.
+    // Never walks past the direct parent.
+    function getSameOriginParent() {
+        try {
+            if (window.parent && window.parent !== window) {
+                // Touching location throws if the parent is cross-origin.
+                void window.parent.location.href;
+                return window.parent;
+            }
+        } catch (e) { /* cross-origin parent */ }
+        return null;
+    }
+
+    function isMainAspx(loc) {
+        try {
+            return /\/main\.aspx$/i.test(loc.pathname);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function getReturnUrl() {
+        // The D365 shell/form URL to come back to after a full-page redirect sign-in.
+        // 1. This window, if it is main.aspx
+        // 2. Direct same-origin parent, if it is the main.aspx shell (form scripts and
+        //    web resources opened via main.aspx?pagetype=webresource)
+        // 3. Current app URL from Xrm
+        // 4. This window's own URL
+        if (isMainAspx(window.location)) {
+            return window.location.href;
+        }
+        var p = getSameOriginParent();
+        if (p) {
+            try {
+                if (isMainAspx(p.location)) {
+                    return p.location.href;
+                }
+            } catch (e) { /* ignore */ }
+        }
+        try {
+            var xrm = getXrm();
+            if (xrm && xrm.Utility && xrm.Utility.getGlobalContext) {
+                var ctx = xrm.Utility.getGlobalContext();
+                var appUrl = ctx.getCurrentAppUrl ? ctx.getCurrentAppUrl() : null;
+                if (appUrl) {
+                    return appUrl;
+                }
+            }
+        } catch (e2) { /* ignore */ }
+        return window.location.href;
+    }
+
+    function persistMsalConfig() {
+        try {
+            localStorage.setItem(MSAL_CFG_KEY, JSON.stringify({
+                clientId: CONFIG.clientId,
+                tenantId: CONFIG.tenantId,
+                redirectUri: getRedirectUri(),
+                returnUrl: getReturnUrl()
+            }));
+            log("debug", "msal.config.persisted", { key: MSAL_CFG_KEY });
+        } catch (e) {
+            log("warn", "msal.config.persist_failed", { reason: e && e.message ? e.message : "storage" });
+        }
+    }
+
+    function scopes() {
+        return ["api://" + CONFIG.apiAppId + "/" + CONFIG.scope];
+    }
+
+    function getXrm() {
+        if (typeof Xrm !== "undefined") {
+            return Xrm;
+        }
+        try {
+            // Direct parent only: for form scripts and main.aspx-hosted web resources,
+            // the parent is the D365 shell and exposes Xrm.
+            if (window.parent && window.parent !== window && window.parent.Xrm) {
+                return window.parent.Xrm;
+            }
+        } catch (e) {
+            // cross-origin frame access
+        }
+        return null;
+    }
+
+    function getD365Context() {
+        try {
+            if (typeof GetGlobalContext === "function") {
+                return GetGlobalContext();
+            }
+        } catch (e) {
+            // continue
+        }
+        var xrm = getXrm();
+        if (xrm && xrm.Utility && xrm.Utility.getGlobalContext) {
+            return xrm.Utility.getGlobalContext();
+        }
+        return null;
+    }
+
+    function buildNavigationClient() {
+        // Microsoft's login page cannot be framed, so when this library runs inside the
+        // D365 shell the interactive sign-in must replace the whole page. The "_top" target
+        // navigates the top-level browsing context (like <a target="_top">) without reading
+        // or writing any property of the top window object, so it cannot raise a
+        // cross-origin error. The browser still enforces its navigation rules.
+        var client = new msal.NavigationClient();
+        client.navigateExternal = function (url) {
+            if (isFramed()) {
+                var opened = null;
+                try {
+                    opened = window.open(url, "_top");
+                } catch (e) {
+                    opened = null;
+                }
+                if (opened) {
+                    return Promise.resolve(true);
+                }
+                log("error", "token.redirect.blocked", {
+                    note: "Browser blocked top-level sign-in navigation from the frame."
+                });
+                return Promise.resolve(false);
+            }
+            window.location.href = url;
+            return Promise.resolve(true);
+        };
+        return client;
+    }
+
+    function loadMsal() {
+        if (typeof msal !== "undefined") {
+            log("debug", "msal.load.already_present", null);
+            return Promise.resolve();
+        }
+        if (msalLoad) {
+            log("debug", "msal.load.in_flight", null);
+            return msalLoad;
+        }
+        var src = origin() + CONFIG.msalWebResourcePath;
+        log("info", "msal.load.start", { src: src });
+        msalLoad = new Promise(function (resolve, reject) {
+            var s = document.createElement("script");
+            s.src = src;
+            s.onload = function () {
+                if (typeof msal !== "undefined") {
+                    log("info", "msal.load.ok", null);
+                    resolve();
+                } else {
+                    log("error", "msal.load.missing_global", { src: src });
+                    reject(new Error("MSAL loaded but global 'msal' is undefined."));
+                }
+            };
+            s.onerror = function () {
+                log("error", "msal.load.failed", { src: src });
+                reject(new Error("Failed to load MSAL web resource: " + src));
+            };
+            document.head.appendChild(s);
+        });
+        return msalLoad;
+    }
+
+    function buildMsalConfig() {
+        var cfg = {
+            auth: {
+                clientId: CONFIG.clientId,
+                authority: "https://login.microsoftonline.com/" + CONFIG.tenantId,
+                redirectUri: getRedirectUri(),
+                navigateToLoginRequestUrl: false
+            },
+            // localStorage: shared with the callback page; survives tab close.
+            // See file header for lifetime and KOFC.Auth.clearCache() instructions.
+            cache: {
+                cacheLocation: "localStorage",
+                storeAuthStateInCookie: true // helps iframe / Safari auth-state persistence
+            },
+            // Timeouts apply to the ssoSilent hidden iframe. Raised because D365 web resources
+            // (CSP, wrappers, cold load) frequently exceed MSAL's ~6s default -> "timed_out".
+            system: {
+                iframeHashTimeout: CONFIG.iframeHashTimeout || 12000,
+                loadFrameTimeout: CONFIG.loadFrameTimeout || 12000
+            }
+        };
+        // NavigationClient + allowRedirectInIframe are needed only for the interactive redirect
+        // or popup fallbacks (same as the validator). They send the redirect to the top-level
+        // page instead of navigating the hidden form iframe. Not added in pure silent mode.
+        if (CONFIG.allowInteractive || CONFIG.allowRedirect) {
+            cfg.system.allowRedirectInIframe = true;
+            cfg.system.navigationClient = buildNavigationClient();
+        }
+        return cfg;
+    }
+
+    async function initMsal() {
+        if (msalApp) {
+            log("debug", "msal.init.reuse", null);
+            return msalApp;
+        }
+        if (msalInitPromise) {
+            log("debug", "msal.init.await_in_flight", null);
+            return msalInitPromise;
+        }
+
+        log("info", "msal.init.start", {
+            clientId: CONFIG.clientId,
+            tenantId: CONFIG.tenantId,
+            redirectUri: getRedirectUri(),
+            allowInteractive: !!CONFIG.allowInteractive,
+            scopes: scopes()
+        });
+
+        msalInitPromise = (async function () {
+            await loadMsal();
+            var app = new msal.PublicClientApplication(buildMsalConfig());
+            await app.initialize();
+            msalApp = app;
+            persistMsalConfig();
+            await msalApp.handleRedirectPromise();
+            log("info", "msal.init.ok", {
+                accountCount: msalApp.getAllAccounts().length
+            });
+            return msalApp;
+        })();
+
+        try {
+            return await msalInitPromise;
+        } catch (e) {
+            msalApp = null;
+            msalInitPromise = null;
+            log("error", "msal.init.failed", { error: formatAuthError(e) });
+            throw e;
+        }
+    }
+
+    function pickAccount(accounts, loginHint) {
+        if (!accounts || accounts.length === 0) {
+            return null;
+        }
+        if (loginHint) {
+            var hint = loginHint.toLowerCase();
+            for (var i = 0; i < accounts.length; i++) {
+                var username = (accounts[i].username || "").toLowerCase();
+                if (username === hint) {
+                    return accounts[i];
+                }
+            }
+        }
+        return accounts[0];
+    }
+
+    function isTimeout(err) {
+        if (!err) {
+            return false;
+        }
+        var code = "";
+        try {
+            code = String(err.errorCode || err.message || "");
+        } catch (ignore) {
+            code = "";
+        }
+        return code.indexOf("timed_out") >= 0
+            || code.indexOf("monitor_window_timeout") >= 0
+            || code.indexOf("iframe") >= 0 && code.indexOf("timeout") >= 0;
+    }
+
+    function formatAuthError(err) {
+        if (!err) {
+            return "unknown error";
+        }
+        try {
+            if (err.errorCode) {
+                return String(err.errorCode) + (err.subError ? " (" + err.subError + ")" : "");
+            }
+            if (err.message) {
+                return String(err.message);
+            }
+        } catch (ignore) {
+            // avoid circular/error getter recursion
+        }
+        return "authentication error";
+    }
+
+    /** Safe JWT claims only — never returns the raw token. */
+    function tokenMeta(token) {
+        try {
+            var parts = (token || "").split(".");
+            if (parts.length < 2) {
+                return null;
+            }
+            var json = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+            var claims = JSON.parse(json);
+            return {
+                aud: claims.aud || null,
+                scp: claims.scp || null,
+                roles: claims.roles || null,
+                oid: claims.oid || null,
+                tid: claims.tid || null,
+                exp: claims.exp || null,
+                expiresInSec: claims.exp ? (claims.exp - Math.floor(Date.now() / 1000)) : null
+            };
+        } catch (e) {
+            return { parseError: true };
+        }
+    }
+
+    async function getTokenInner(loginHint) {
+        requireConfig();
+        await initMsal();
+
+        var scopeList = scopes();
+        var lastError = null;
+
+        log("info", "token.start", {
+            loginHint: loginHint || null,
+            scopes: scopeList,
+            allowInteractive: !!CONFIG.allowInteractive
+        });
+
+        // 1) Silent from MSAL cache (same order as validator — works after any prior sign-in).
+        var accounts = msalApp.getAllAccounts();
+        var account = pickAccount(accounts, loginHint);
+        log("debug", "token.accounts", {
+            count: accounts.length,
+            selected: account ? (account.username || account.homeAccountId || "(account)") : null
+        });
+
+        if (account) {
+            try {
+                log("info", "token.silent.try", { account: account.username || null });
+                var silent = await msalApp.acquireTokenSilent({
+                    scopes: scopeList,
+                    account: account
+                });
+                log("info", "token.silent.ok", tokenMeta(silent.accessToken));
+                return silent.accessToken;
+            } catch (e) {
+                lastError = e;
+                log("warn", "token.silent.failed", { error: formatAuthError(e) });
+            }
+        } else {
+            log("debug", "token.silent.skip", { reason: "no_cached_account" });
+        }
+
+        // 2) ssoSilent via hidden iframe — ONLY worth trying if MSAL can resolve the user
+        //    silently, i.e. we have a cached account OR a loginHint (UPN). With neither,
+        //    Entra can't pick a session in the hidden iframe and it just burns the full
+        //    timeout ("timed_out / redirect_bridge_timeout"), so we skip straight to redirect..
+        if (account || loginHint) {
+            var ssoReq = { scopes: scopeList };
+            if (loginHint) {
+                ssoReq.loginHint = loginHint;
+            }
+            if (account) {
+                ssoReq.account = account;
+            }
+            var attempts = (CONFIG.ssoSilentRetries || 0) + 1;
+            for (var attempt = 1; attempt <= attempts; attempt++) {
+                try {
+                    log("info", "token.ssoSilent.try", {
+                        loginHint: loginHint || null,
+                        hasAccount: !!account,
+                        attempt: attempt,
+                        of: attempts
+                    });
+                    var sso = await msalApp.ssoSilent(ssoReq);
+                    log("info", "token.ssoSilent.ok", tokenMeta(sso.accessToken));
+                    return sso.accessToken;
+                } catch (e) {
+                    lastError = e;
+                    log("warn", "token.ssoSilent.failed", {
+                        error: formatAuthError(e),
+                        attempt: attempt
+                    });
+                    // Only a timeout is worth retrying; other errors won't fix themselves.
+                    if (!isTimeout(e) || attempt >= attempts) {
+                        break;
+                    }
+                }
+            }
+        } else {
+            log("info", "token.ssoSilent.skip", {
+                reason: "no_account_and_no_loginHint",
+                note: "ssoSilent cannot resolve a user silently; using redirect fallback."
+            });
+        }
+
+        // 3) Full-page redirect fallback (mirrors the validator). Reliably fixes ssoSilent
+        //    "timed_out": the callback page reads the code via handleRedirectPromise on return.
+        //    This navigates away and does not return a token to THIS call — the returning page
+        //    caches the token so the next click is silent.
+        if (CONFIG.allowRedirect) {
+            log("info", "token.redirect.start", {
+                reason: formatAuthError(lastError),
+                redirectUri: getRedirectUri()
+            });
+            var redirectReq = {
+                scopes: scopeList,
+                redirectStartPage: getRedirectUri()
+            };
+            if (loginHint) {
+                redirectReq.loginHint = loginHint;
+            }
+            await msalApp.acquireTokenRedirect(redirectReq);
+            // Page navigates away here; nothing after this runs.
+            return null;
+        }
+
+        if (!CONFIG.allowInteractive) {
+            var timedOut = isTimeout(lastError);
+            log("error", "token.silent_only.exhausted", {
+                lastError: formatAuthError(lastError),
+                timedOut: timedOut,
+                redirectUri: getRedirectUri(),
+                loginHint: loginHint || null
+            });
+            throw new Error(
+                "Silent sign-in failed (" + formatAuthError(lastError) + "). "
+                + (timedOut
+                    ? "timed_out = the silent hidden iframe never got the auth response. Most common causes: "
+                      + "(1) third-party cookies are blocked (Edge/Chrome tracking-prevention) so the iframe "
+                      + "cannot use your Entra session; (2) the redirect URI " + redirectWebResourceName()
+                      + " is not registered in Entra (SPA) or 404s; (3) slow web-resource load. "
+                      + "Try: allow third-party cookies for login.microsoftonline.com, verify the SPA redirect URI, "
+                      + "then retry. For first-time consent set CONFIG.allowInteractive = true. "
+                    : "Verify the redirect URI " + redirectWebResourceName() + " is registered in Entra (SPA), "
+                      + "CONFIG tenantId/clientId/apiAppId match the validator, admin consent is granted, and "
+                      + "loginHint (" + (loginHint || "none") + ") matches the user's Entra UPN. ")
+                + "See console [KOFC.Auth] logs or KOFC.Auth.dumpLogs()."
+            );
+        }
+
+        // 3) Interactive popup — only when allowInteractive is true.
+        var popupReq = { scopes: scopeList, prompt: "select_account" };
+        if (loginHint) {
+            popupReq.loginHint = loginHint;
+        }
+        log("info", "token.popup.try", { loginHint: loginHint || null });
+        var popup = await msalApp.acquireTokenPopup(popupReq);
+        log("info", "token.popup.ok", tokenMeta(popup.accessToken));
+        return popup.accessToken;
+    }
+
+    async function getToken(loginHint) {
+        if (tokenInProgress) {
+            log("debug", "token.await_in_flight", null);
+            return tokenInProgress;
+        }
+        tokenInProgress = getTokenInner(loginHint).finally(function () {
+            tokenInProgress = null;
+        });
+        return tokenInProgress;
+    }
+
+    function redirectWebResourceName() {
+        return CONFIG.redirectWebResource || "kofc_authcallback.html";
+    }
+
+    function deriveLoginHint() {
+        try {
+            var ctx = getD365Context();
+            if (ctx && ctx.userSettings && ctx.userSettings.userName
+                && ctx.userSettings.userName.indexOf("@") > 0) {
+                return ctx.userSettings.userName;
+            }
+        } catch (e) {
+            // continue
+        }
+        return null;
+    }
+
+    /**
+     * Clears MSAL tokens/accounts and EApp callback config from localStorage, and resets
+     * in-memory MSAL state. Use before re-testing silent auth (console: KOFC.Auth.clearCache()).
+     * Does not clear Entra cookies — use InPrivate or clear login.microsoftonline.com cookies
+     * if you also need a fresh SSO session.
+     */
+    function clearCache() {
+        var removed = 0;
+        try {
+            var keys = [];
+            for (var i = 0; i < localStorage.length; i++) {
+                keys.push(localStorage.key(i));
+            }
+            keys.forEach(function (key) {
+                if (!key) {
+                    return;
+                }
+                if (key === MSAL_CFG_KEY
+                    || key.indexOf("msal.") === 0 || key.indexOf("msal-") === 0) {
+                    localStorage.removeItem(key);
+                    removed++;
+                }
+            });
+        } catch (e) {
+            log("warn", "cache.clear.storage_blocked", {
+                reason: e && e.message ? e.message : "storage"
+            });
+        }
+
+        msalApp = null;
+        msalLoad = null;
+        msalInitPromise = null;
+        tokenInProgress = null;
+
+        var msg = "MSAL cache cleared (" + removed + " key(s)). Hard-refresh, then retry.";
+        log("info", "cache.clear.ok", { removed: removed });
+        return { removed: removed, message: msg };
+    }
+
+    // Config keys the caller may override at runtime via configure().
+    var CONFIGURABLE_KEYS = [
+        "tenantId", "clientId", "apiAppId", "scope",
+        "boomiUrl", "httpMethod", "apiKey",
+        "redirectUri", "redirectWebResource", "msalWebResourcePath",
+        "allowInteractive", "allowRedirect",
+        "debug", "logBufferSize",
+        "iframeHashTimeout", "loadFrameTimeout", "ssoSilentRetries"
+    ];
+    // Changing any of these means the existing MSAL instance must be rebuilt.
+    var AUTH_KEYS = { tenantId: 1, clientId: 1, redirectUri: 1, redirectWebResource: 1 };
+
+    /**
+     * Public: set configuration at runtime so this library is reusable across buttons/entities
+     * without hard-coding credentials. Pass only the keys you want to override, e.g.:
+     *
+     *   KOFC.Auth.configure({
+     *     tenantId: "...", clientId: "...", apiAppId: "...", scope: "access_as_user",
+     *     boomiUrl: "https://.../ws/rest/...", apiKey: "...", httpMethod: "POST",
+     *     redirectWebResource: "kofc_authcallback.html",
+     *     msalWebResourcePath: "/WebResources/kofc_msalbrowsermin",
+     *     allowRedirect: true, debug: false
+     *   });
+     *
+     * Safe to call again; if an auth-related key changes, the MSAL instance is rebuilt.
+     */
+    function configure(options) {
+        if (!options || typeof options !== "object") {
+            return false;
+        }
+        var authChanged = false;
+        CONFIGURABLE_KEYS.forEach(function (k) {
+            if (options[k] !== undefined) {
+                if (AUTH_KEYS[k] && options[k] !== CONFIG[k]) {
+                    authChanged = true;
+                }
+                CONFIG[k] = options[k];
+            }
+        });
+        if (authChanged) {
+            // Force a fresh PublicClientApplication on next token request.
+            msalApp = null;
+            msalLoad = null;
+            msalInitPromise = null;
+        }
+        log("info", "configure", { keys: Object.keys(options), authChanged: authChanged });
+        return true;
+    }
+
+    // Public: acquire the delegated user access token (silent cache -> ssoSilent; popup only if allowInteractive).
+    async function getAccessToken() {
+        correlationId = newCorrelationId();
+        log("info", "getAccessToken.start", null);
+        return getToken(deriveLoginHint());
+    }
+
+    return {
+        configure: configure,
+        getAccessToken: getAccessToken,
+        clearCache: clearCache,
+        getLogs: getLogs,
+        clearLogs: clearLogs,
+        dumpLogs: dumpLogs
+    };
+})();
