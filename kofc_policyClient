@@ -1,0 +1,318 @@
+/*
+ * ============================================================================
+ * kofc_policyClient.js — Policy Non-Header Tier One client (Boomi + MSAL)
+ * ============================================================================
+ *
+ * Namespace: KOFC.Policy
+ *
+ * Uses shared KOFC.Auth (MSAL) then calls Boomi with Authorization: Bearer + x-api-key.
+ * Boomi validates and forwards the same SPA token. Identity = token oid (no userId).
+ *
+ * Prerequisites:
+ *   kofc_authclient.js       — KOFC.Auth (shared MSAL)
+ *   kofc_authcallback.html   — MSAL redirect URI (shared)
+ *   kofc_msalbrowsermin      — MSAL.js
+ *
+ * Usage:
+ *   KOFC.Policy.configure({ tenantId, clientId, apiAppId, apiKey, boomiUrl, ... });
+ *   var result = await KOFC.Policy.getPolicyData({
+ *       source: "ing", companyCode: "01", policyNo: "123456",
+ *       classificationCode: "ABC",
+ *       policyRecordId: "<policy-record-guid>"  // optional
+ *   });
+ *   if (result && result.redirecting) { return; }
+ * ============================================================================
+ */
+(function (global) {
+    "use strict";
+
+    var AUTH_LIBRARY = "/WebResources/kofc_authclient.js";
+    var PENDING_KEY = "kofc_policy_pending";
+    var RESULT_KEY = "kofc_policy_result";
+
+    var CONFIG = {
+        tenantId: null,
+        clientId: null,
+        apiAppId: null,
+        apiKey: null,
+        boomiUrl: null,
+        scope: ".default",
+        httpMethod: "POST",
+        redirectWebResource: "kofc_authcallback.html",
+        msalWebResourcePath: "/WebResources/kofc_msalbrowsermin",
+        allowRedirect: true,
+        debug: false
+    };
+
+    function log() {
+        if (!CONFIG.debug) {
+            return;
+        }
+        var args = ["[KOFC.Policy]"].concat(Array.prototype.slice.call(arguments));
+        if (typeof console !== "undefined" && console.log) {
+            console.log.apply(console, args);
+        }
+    }
+
+    function clientUrl() {
+        try {
+            if (typeof Xrm !== "undefined" && Xrm.Utility) {
+                return Xrm.Utility.getGlobalContext().getClientUrl();
+            }
+        } catch (e) {
+            // ignore
+        }
+        return window.location.origin;
+    }
+
+    function apiScopes() {
+        return ["api://" + CONFIG.apiAppId + "/" + CONFIG.scope];
+    }
+
+    function requireConfig() {
+        var missing = [];
+        if (!CONFIG.tenantId) { missing.push("tenantId"); }
+        if (!CONFIG.clientId) { missing.push("clientId"); }
+        if (!CONFIG.apiAppId) { missing.push("apiAppId"); }
+        if (!CONFIG.boomiUrl) { missing.push("boomiUrl"); }
+        if (!CONFIG.apiKey) { missing.push("apiKey"); }
+        if (missing.length > 0) {
+            throw new Error(
+                "KOFC.Policy is not configured. Call configure() with: " + missing.join(", ")
+            );
+        }
+    }
+
+    function ensureAuthClient() {
+        return new Promise(function (resolve, reject) {
+            if (global.KOFC && global.KOFC.Auth) {
+                resolve();
+                return;
+            }
+            var script = document.createElement("script");
+            script.src = clientUrl() + AUTH_LIBRARY;
+            script.onload = function () {
+                if (global.KOFC && global.KOFC.Auth) {
+                    resolve();
+                } else {
+                    reject(new Error("Auth client loaded but KOFC.Auth is undefined."));
+                }
+            };
+            script.onerror = function () {
+                reject(new Error("Failed to load auth client: " + script.src));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    function applyAuthConfig() {
+        global.KOFC.Auth.configure({
+            tenantId: CONFIG.tenantId,
+            clientId: CONFIG.clientId,
+            apiAppId: CONFIG.apiAppId,
+            apiKey: CONFIG.apiKey,
+            boomiUrl: CONFIG.boomiUrl,
+            scope: CONFIG.scope,
+            httpMethod: CONFIG.httpMethod,
+            redirectWebResource: CONFIG.redirectWebResource,
+            msalWebResourcePath: CONFIG.msalWebResourcePath,
+            allowRedirect: CONFIG.allowRedirect,
+            debug: CONFIG.debug
+        });
+    }
+
+    function getReturnUrl() {
+        try {
+            return window.top.location.href;
+        } catch (e) {
+            return window.location.href;
+        }
+    }
+
+    function persistPending(params) {
+        try {
+            localStorage.setItem(PENDING_KEY, JSON.stringify({
+                action: "policy",
+                source: params.source,
+                companyCode: params.companyCode,
+                policyNo: params.policyNo,
+                classificationCode: params.classificationCode,
+                policyRecordId: params.policyRecordId,
+                boomiUrl: CONFIG.boomiUrl,
+                apiKey: CONFIG.apiKey,
+                httpMethod: CONFIG.httpMethod || "POST",
+                apiScopes: apiScopes(),
+                returnUrl: getReturnUrl()
+            }));
+            log("Pending policy request persisted");
+        } catch (e) {
+            log("Failed to persist pending", e);
+        }
+    }
+
+    function clearPending() {
+        try {
+            localStorage.removeItem(PENDING_KEY);
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    function buildPolicyUrl(params) {
+        var base = CONFIG.boomiUrl;
+        var parts = [
+            "source=" + encodeURIComponent(params.source),
+            "companyCode=" + encodeURIComponent(params.companyCode),
+            "policyNo=" + encodeURIComponent(params.policyNo),
+            "classificationCode=" + encodeURIComponent(params.classificationCode)
+        ];
+        if (params.policyRecordId) {
+            parts.push("policyRecordId=" + encodeURIComponent(params.policyRecordId));
+        }
+        return base + (base.indexOf("?") >= 0 ? "&" : "?") + parts.join("&");
+    }
+
+    function parseResponseBody(text) {
+        if (!text) {
+            return null;
+        }
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            return text;
+        }
+    }
+
+    function callPolicyBoomi(token, params) {
+        var method = (CONFIG.httpMethod || "POST").toUpperCase();
+        var url = buildPolicyUrl(params);
+        log(method, url);
+
+        var options = {
+            method: method,
+            headers: {
+                "Authorization": "Bearer " + token,
+                "Accept": "application/json"
+            }
+        };
+
+        if (method !== "GET" && method !== "HEAD") {
+            options.headers["Content-Type"] = "application/json";
+            options.body = JSON.stringify({
+                source: params.source,
+                companyCode: params.companyCode,
+                policyNo: params.policyNo,
+                classificationCode: params.classificationCode,
+                policyRecordId: params.policyRecordId || undefined
+            });
+        }
+
+        return fetch(url, options).then(function (response) {
+            return response.text().then(function (text) {
+                var result = {
+                    ok: response.ok,
+                    status: response.status,
+                    data: parseResponseBody(text),
+                    raw: text,
+                    redirecting: false
+                };
+                log("Response", result.status);
+                return result;
+            });
+        });
+    }
+
+    /**
+     * Configure auth + Boomi settings (same shape as KOFC.Auth.configure plus boomiUrl).
+     */
+    function configure(options) {
+        if (!options || typeof options !== "object") {
+            throw new Error("KOFC.Policy.configure(options) requires an object.");
+        }
+        var keys = [
+            "tenantId", "clientId", "apiAppId", "apiKey", "boomiUrl",
+            "scope", "httpMethod", "redirectWebResource", "msalWebResourcePath",
+            "allowRedirect", "debug"
+        ];
+        keys.forEach(function (k) {
+            if (options[k] !== undefined) {
+                CONFIG[k] = options[k];
+            }
+        });
+        log("Configured");
+    }
+
+    /**
+     * After a redirect sign-in, the callback page stores the result here.
+     * Call from form OnLoad or at the start of your button handler.
+     * @returns {object|null} { ok, status, data, raw } or null
+     */
+    function consumePendingResult() {
+        try {
+            var raw = localStorage.getItem(RESULT_KEY);
+            if (!raw) {
+                return null;
+            }
+            localStorage.removeItem(RESULT_KEY);
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Acquire MSAL token via KOFC.Auth, call Boomi, return policy JSON.
+     * Returns { redirecting: true } when a full-page sign-in redirect is in progress
+     * (kofc_authcallback.html finishes automatically on return).
+     */
+    function getPolicyData(params) {
+        requireConfig();
+
+        if (!params || typeof params !== "object") {
+            return Promise.reject(new Error("getPolicyData(params) requires an object."));
+        }
+
+        var required = ["source", "companyCode", "policyNo", "classificationCode"];
+        for (var i = 0; i < required.length; i++) {
+            if (!params[required[i]]) {
+                return Promise.reject(new Error("Missing required parameter: " + required[i]));
+            }
+        }
+
+        return ensureAuthClient().then(function () {
+            applyAuthConfig();
+            persistPending(params);
+            return global.KOFC.Auth.getAccessToken();
+        }).then(function (token) {
+            if (!token) {
+                log("Redirect in progress — callback will finish");
+                return { ok: false, status: 0, data: null, raw: "", redirecting: true };
+            }
+            return callPolicyBoomi(token, params).then(function (result) {
+                clearPending();
+                return result;
+            });
+        });
+    }
+
+    function clearCache() {
+        clearPending();
+        try {
+            localStorage.removeItem(RESULT_KEY);
+        } catch (e) {
+            // ignore
+        }
+        if (global.KOFC && global.KOFC.Auth && global.KOFC.Auth.clearCache) {
+            return global.KOFC.Auth.clearCache();
+        }
+        return { message: "Policy cache cleared." };
+    }
+
+    global.KOFC = global.KOFC || {};
+    global.KOFC.Policy = {
+        configure: configure,
+        getPolicyData: getPolicyData,
+        consumePendingResult: consumePendingResult,
+        clearCache: clearCache
+    };
+})(typeof window !== "undefined" ? window : this);
