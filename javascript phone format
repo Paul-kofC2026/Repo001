@@ -7,7 +7,8 @@ var ContactPhoneManager = (function () {
         "mobilephone"   // Mobile Phone
     ];
 
-    const COUNTRY_FIELD = "address1_country";
+    const COUNTRY_FIELD = "kofc_address_country";      // Country option set
+    const LEGACY_COUNTRY_FIELD = "address1_country";   // free-text fallback when the option set is empty
     const ERROR_ID = "PhoneValidation";
     const ERROR_MESSAGE = "Phone number must contain a valid country code and telephone number.";
     const MIN_DIGITS = 7;
@@ -23,6 +24,209 @@ var ContactPhoneManager = (function () {
         "scotland": "GB", "wales": "GB", "northern ireland": "GB",
         "uae": "AE", "south korea": "KR", "korea": "KR", "russia": "RU",
         "czech republic": "CZ", "holland": "NL", "vietnam": "VN", "ivory coast": "CI"
+    };
+
+    // kofc_address_country option value -> ISO country code (null = no single country).
+    const COUNTRY_OPTION_CODES = {
+        258510000: "US",    // UNITED STATES OF AMERICA
+        258510001: "GB",    // UNITED KINGDOM
+        258510002: "NZ",    // NEW ZEALAND
+        258510003: "AU",    // AUSTRALIA
+        258510004: "CA",    // CANADA
+        258510005: "AF",    // Afghanistan
+        258510006: "AL",    // Albania
+        258510007: "DZ",    // Algeria
+        258510008: "AD",    // Andorra
+        258510009: "AO",    // Angola
+        258510010: "AG",    // Antigua and Barbuda
+        258510011: "AR",    // Argentina
+        258510012: "AM",    // Armenia
+        258510013: "AW",    // Aruba
+        258510014: "AT",    // Austria
+        258510015: "AZ",    // Azerbaijan
+        258510016: "BS",    // Bahamas
+        258510017: "BH",    // Bahrain
+        258510018: "BD",    // Bangladesh
+        258510019: "BB",    // Barbados
+        258510020: "BY",    // Belarus
+        258510021: "BE",    // Belgium
+        258510022: "BZ",    // Belize
+        258510023: "BJ",    // Benin
+        258510024: "BM",    // Bermuda
+        258510025: "BT",    // Bhutan
+        258510026: "BO",    // Bolivia
+        258510027: "BA",    // Bosnia and Herzegovina
+        258510028: "BW",    // Botswana
+        258510029: "BR",    // Brazil
+        258510030: "BN",    // Brunei
+        258510031: "BG",    // Bulgaria
+        258510032: "BF",    // Burkina Faso
+        258510033: "BI",    // Burundi
+        258510034: "KH",    // Cambodia
+        258510035: "CM",    // Cameroon
+        258510037: "CV",    // Cape Verde Island
+        258510038: "KY",    // Cayman Islands
+        258510039: "CF",    // Central African Republic
+        258510040: "TD",    // Chad
+        258510041: "CL",    // Chile
+        258510042: "CN",    // China
+        258510043: "CO",    // Colombia
+        258510044: "KM",    // Comoro
+        258510045: "CG",    // Congro
+        258510046: "CD",    // Congo, The Democratic Republic of the
+        258510047: "CK",    // Cook Islands
+        258510048: "CR",    // Costa Rica
+        258510049: "CI",    // Cote D'Ivoire
+        258510050: "HR",    // Croatia
+        258510051: "CU",    // Cuba
+        258510052: "CY",    // Cyprus
+        258510053: "CZ",    // Czech Republic
+        258510054: "DK",    // Denmark
+        258510055: "DJ",    // Djibouti
+        258510056: "DM",    // Dominica
+        258510057: "DO",    // Dominican Republic
+        258510058: "EC",    // Ecuador
+        258510059: "EG",    // Egypt
+        258510060: "SV",    // El Salvador
+        258510061: "GQ",    // Equatorial Guinea
+        258510062: "ER",    // Eritrea
+        258510063: "EE",    // Estonia
+        258510064: "ET",    // Ethiopia
+        258510065: "FJ",    // Figi
+        258510066: "FI",    // Finland
+        258510067: "FR",    // France
+        258510068: "PF",    // French Polynesia
+        258510069: "GA",    // Gabon
+        258510070: "GM",    // Gambia
+        258510071: "GE",    // Georgia
+        258510072: "DE",    // Germany
+        258510073: "GH",    // Ghana
+        258510074: "GR",    // Greece
+        258510075: "GL",    // Greenland
+        258510076: "GD",    // Grenada
+        258510077: "GT",    // Guatemala
+        258510078: "GN",    // Guinea
+        258510079: "GW",    // Guinea-Bissau
+        258510080: "GY",    // Guyana
+        258510081: "HT",    // Haiti
+        258510082: "VA",    // Holy See (Vatican City State)
+        258510083: "HN",    // Honduras
+        258510084: "HK",    // Hong Kong
+        258510085: "HU",    // Hungary
+        258510086: "IS",    // Iceland
+        258510087: "IN",    // India
+        258510088: "ID",    // Indonesia
+        258510089: "IR",    // Iran, Islamic Republic of
+        258510090: "IQ",    // Iraq
+        258510091: "IE",    // Ireland
+        258510092: "IL",    // Israel
+        258510093: "IT",    // Italy
+        258510094: "JM",    // Jamaica
+        258510095: "JP",    // Japan
+        258510096: "JO",    // Jordan
+        258510097: "KZ",    // Kazakhstan
+        258510098: "KE",    // Kenya
+        258510099: "KI",    // Kiribati
+        258510100: "KR",    // Korea, Republic of
+        258510101: "KW",    // Kuwait
+        258510102: "KG",    // Kyrgyzstan
+        258510103: "LA",    // Lao, People's Democratic Republic of
+        258510104: "LV",    // Latvia
+        258510105: "LB",    // Lebanon
+        258510106: "LS",    // Lesotho
+        258510107: "LR",    // Liberia
+        258510108: "LY",    // Libyan Arab Jamahiriya
+        258510109: "LI",    // Liechtenstein
+        258510110: "LT",    // Lithuania
+        258510111: "LU",    // Luxembourg
+        258510112: "MK",    // Macedonia, Republic of
+        258510113: "MG",    // Madagascar
+        258510114: "MW",    // Malawi
+        258510115: "MY",    // Malaysia
+        258510116: "MV",    // Maldives
+        258510117: "ML",    // Mali
+        258510118: "MT",    // Malta
+        258510119: "MH",    // Marshall Islands
+        258510120: "MR",    // Mauritania
+        258510121: "MU",    // Mauritius
+        258510122: "MX",    // Mexico
+        258510123: "FM",    // Micronesia
+        258510124: "MD",    // Moldavia
+        258510125: "MC",    // Monaco
+        258510126: "MN",    // Mongolia
+        258510127: "MS",    // Montserrat
+        258510128: "MA",    // Morocco
+        258510129: "MZ",    // Mozambique
+        258510130: "MM",    // Myanmar
+        258510131: "NA",    // Namibia
+        258510132: "NR",    // Nauru
+        258510133: "NP",    // Nepal
+        258510134: "NL",    // Netherlands
+        258510135: null,    // Netherlands Antilles (no single country; country code required)
+        258510136: "NC",    // New Caledonia
+        258510137: "NI",    // Nicaragua
+        258510138: "NG",    // Nigeria
+        258510139: "NU",    // Niue
+        258510140: "KP",    // North Korea
+        258510141: "NO",    // Norway
+        258510142: "OM",    // Oman
+        258510143: "PK",    // Pakistan
+        258510144: "PA",    // Panama
+        258510145: "PG",    // Papua New Guinea
+        258510146: "PY",    // Paraguay
+        258510147: "PE",    // Peru
+        258510148: "PH",    // Philippines
+        258510149: "PL",    // Poland
+        258510150: "PT",    // Portugal
+        258510151: "QA",    // Qatar
+        258510152: "RO",    // Romania
+        258510153: "RU",    // Russia
+        258510154: "RW",    // Rwanda
+        258510155: "KN",    // Saint Kitts and Nevis
+        258510156: "LC",    // Saint Lucia
+        258510157: "WS",    // Samoa
+        258510158: "SM",    // San Marino
+        258510159: "ST",    // Sao Tomé and Principe
+        258510160: "SA",    // Saudi Arabia
+        258510161: null,    // Serbia and Montenegro (no single country; country code required)
+        258510162: "SL",    // Sierra Leone
+        258510163: "SG",    // Singapore
+        258510164: "SK",    // Slovakia
+        258510165: "SI",    // Slovenia
+        258510166: "SB",    // Solomon Islands
+        258510167: "SO",    // Somalia
+        258510168: "ZA",    // South Africa
+        258510169: "ES",    // Spain
+        258510170: "LK",    // Sri Lanka
+        258510171: "SD",    // Sudan
+        258510172: "SR",    // Surinam
+        258510173: "SZ",    // Swaziland
+        258510174: "SE",    // Sweden
+        258510175: "CH",    // Switzerland
+        258510176: "SY",    // Syria
+        258510177: "TW",    // Taiwan, Province of China
+        258510178: "TJ",    // Tajikistan
+        258510179: "TZ",    // Tanzania, Untied Republic of
+        258510180: "TH",    // Thailand
+        258510181: "TG",    // Togo
+        258510182: "TO",    // Tonga
+        258510183: "TT",    // Trinidad and Tobago
+        258510184: "TN",    // Tunisia
+        258510185: "TR",    // Turkey
+        258510186: "TM",    // Turkmenistan
+        258510187: "TC",    // Turks and Caicos Islands
+        258510188: "TV",    // Tuvalu
+        258510189: "UG",    // Uganda
+        258510190: "UA",    // Ukraine
+        258510191: "UY",    // Uruguay
+        258510192: "UZ",    // Uzbekistan
+        258510194: "VE",    // Venezuela
+        258510195: "VN",    // Viet Nam
+        258510196: "VG",    // Virgin Islands UK
+        258510197: "VI",    // Virgin Islands US
+        258510198: "YE",    // Yemen
+        258510199: "ZM",    // Zambia
+        258510200: "ZW",    // Zimbabwe
     };
 
     let countryLookup = null;
@@ -75,6 +279,37 @@ var ContactPhoneManager = (function () {
             }
         } catch (error) {
             logError("onPhoneChange", error);
+        }
+    }
+
+    function onCountryChange(executionContext) {
+        try {
+            const formContext = executionContext.getFormContext();
+            const country = getDefaultCountry(formContext);
+            PHONE_FIELDS.forEach(function (fieldName) {
+                const attribute = formContext.getAttribute(fieldName);
+                if (!attribute ||
+                    attribute.getSubmitMode() === "never" ||
+                    !attribute.getIsDirty() ||
+                    !isEditable(attribute)) {
+                    return;
+                }
+                clearFieldError(attribute);
+                const value = attribute.getValue();
+                if (!value) {
+                    return;
+                }
+                const result = analyzePhone(value, country);
+                if (!result.valid) {
+                    setFieldError(attribute);
+                    return;
+                }
+                if (result.display !== value) {
+                    attribute.setValue(result.display);
+                }
+            });
+        } catch (error) {
+            logError("onCountryChange", error);
         }
     }
 
@@ -187,12 +422,16 @@ var ContactPhoneManager = (function () {
     }
 
     function getDefaultCountry(formContext) {
+        const option = formContext.getAttribute(COUNTRY_FIELD);
+        if (option && option.getValue() !== null) {
+            return COUNTRY_OPTION_CODES[option.getValue()] || null;
+        }
         const lib = getLibrary();
-        const attribute = formContext.getAttribute(COUNTRY_FIELD);
-        if (!lib || !attribute || !attribute.getValue()) {
+        const legacy = formContext.getAttribute(LEGACY_COUNTRY_FIELD);
+        if (!lib || !legacy || !legacy.getValue()) {
             return null;
         }
-        return getCountryLookup(lib)[normalizeCountryKey(attribute.getValue())] || null;
+        return getCountryLookup(lib)[normalizeCountryKey(legacy.getValue())] || null;
     }
 
     function getCountryLookup(lib) {
@@ -259,6 +498,7 @@ var ContactPhoneManager = (function () {
     return {
         onLoad: onLoad,
         onPhoneChange: onPhoneChange,
+        onCountryChange: onCountryChange,
         onSave: onSave
     };
 })();
