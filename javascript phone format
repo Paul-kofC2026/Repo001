@@ -1,3 +1,5 @@
+ContactPhoneManager.onCountryChange
+
 var ContactPhoneManager = (function () {
     "use strict";
 
