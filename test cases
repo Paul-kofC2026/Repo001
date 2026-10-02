@@ -1,0 +1,20 @@
+| Test ID | AC       | Scenario                                  | Sample Input                                                               | Expected Result                                              |
+| ------- | -------- | ----------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| S1      | AC5      | Verify library loads                      | Open Contact                                                               | No console errors or `libphonenumber is not loaded` warnings |
+| S2      | AC5      | Verify onLoad executes                    | Open Contact with Power Apps Monitor running                               | `ContactPhoneManager.onLoad` executes without errors         |
+| L3      | AC5      | Form not dirty after load (**Run First**) | Stored value: `+12245221234`                                               | `Xrm.Page.data.entity.getIsDirty()` returns `false`          |
+| L1      | AC2      | Format US number on load                  | Stored value: `+12245221234`                                               | Displays `+1 (224) 522-1234`                                 |
+| L2      | AC2      | Format UK number on load                  | Stored value: `+442079460958`                                              | Displays `+44 20 7946 0958`                                  |
+| L4      | AC5      | Phone field not submitted when unchanged  | Change Job Title only                                                      | Phone fields are not included in `getDataXml()`              |
+| I1      | AC4      | Reject short number                       | `12345`                                                                    | Validation error displayed                                   |
+| I2      | AC4      | Reject invalid US number                  | Country = United States, Phone = `555-12`                                  | Validation error displayed                                   |
+| I3      | AC4      | No country inference                      | Country blank, Phone = `2245221234`                                        | Validation error displayed                                   |
+| I4      | AC4      | Non-US local number without country       | Country blank, Phone = `7123 4567`                                         | Validation error displayed                                   |
+| I5      | AC4      | Invalid phone number                      | Country blank, Phone = `123-456-7890`                                      | Validation error displayed                                   |
+| I6      | AC4      | Invalid E.164 number                      | Country blank, Phone = `+1234567890`                                       | Validation error displayed                                   |
+| I7      | AC3, AC4 | Non-numeric entry                         | Country = United States, Phone = `abc-defg`                                | Validation error displayed                                   |
+| E1      | AC4      | Error clears when corrected               | Enter `12345`, then replace with `224-522-1234`                            | Error appears then clears immediately                        |
+| E2      | AC4      | Save blocking                             | Enter `12345`, click Save                                                  | Save blocked, error remains visible                          |
+| E3      | AC2      | Reformat after save                       | Enter valid phone, save record                                             | Form displays formatted phone after save                     |
+| E6      | AC2, AC4 | Revalidation after Country change         | Country blank, Phone = `7123 4567`; then Country = Costa Rica and re-enter | Error clears and displays `+506 7123 4567`                   |
+| F1      | AC5      | Click-to-call                             | Click formatted phone number                                               | Dialer opens successfully                                    |
