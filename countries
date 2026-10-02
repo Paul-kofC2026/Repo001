@@ -1,242 +1,201 @@
 kofc_address_country
 
-AUSTRALIA
-258,510,003
-UNITED STATES OF AMERICA
-258,510,000
-CANADA
-258,510,004
-UNITED KINGDOM
-258,510,001
-Afghanistan
-258,510,005
-Albania
-258,510,006
-Algeria
-258,510,007
-Andorra
-258,510,008
-Angola
-258,510,009
-Antigua and Barbuda
-258,510,010
-Argentina
-258,510,011
-Armenia
-258,510,012
-Aruba
-258,510,013
-Austria
-258,510,014
-Azerbaijan
-258,510,015
-Bahamas
-258,510,016
-Bahrain
-258,510,017
-Bangladesh
-258,510,018
-Barbados
-258,510,019
-Belarus
-258,510,020
-Belgium
-258,510,021
-Belize
-258,510,022
-Benin
-258,510,023
-Bermuda
-258,510,024
-Bhutan
-258,510,025
-Bolivia
-258,510,026
-Bosnia and Herzegovina
-258,510,027
-Botswana
-258,510,028
-Brazil
-258,510,029
-Brunei
-258,510,030
-Bulgaria
-258,510,031
-Burkina Faso
-258,510,032
-Burundi
-258,510,033
-Cambodia
-258,510,034
-Cameroon
-258,510,035
-Cape Verde Island
-258,510,037
-Cayman Islands
-258,510,038
-Central African Republic
-258,510,039
-Chad
-258,510,040
-Chile
-258,510,041
-China
-258,510,042
-Colombia
-258,510,043
-Comoro
-258,510,044
-Congo, The Democratic Republic of the
-258,510,046
-Congro
-258,510,045
-Cook Islands
-258,510,047
-Costa Rica
-258,510,048
-Cote D'Ivoire
-258,510,049
-Croatia
-258,510,050
-Cuba
-258,510,051
-Cyprus
-258,510,052
-Czech Republic
-258,510,053
-Denmark
-258,510,054
-Djibouti
-258,510,055
-Dominica
-258,510,056
-Dominican Republic
-258,510,057
-Ecuador
-258,510,058
-Egypt
-258,510,059
-El Salvador
-258,510,060
-Equatorial Guinea
-258,510,061
-Eritrea
-258,510,062
-Estonia
-258,510,063
-Ethiopia
-258,510,064
-Figi
-258,510,065
-Finland
-258,510,066
-France
-258,510,067
-French Polynesia
-258,510,068
-Gabon
-258,510,069
-Gambia
-258,510,070
-Georgia
-258,510,071
-Germany
-258,510,072
-Ghana
-258,510,073
-Greece
-258,510,074
-Greenland
-258,510,075
-Grenada
-258,510,076
-Guatemala
-258,510,077
-Guinea
-258,510,078
-Guinea-Bissau
-258,510,079
-Guyana
-258,510,080
-Haiti
-258,510,081
-Holy See (Vatican City State)
-258,510,082
-Honduras
-258,510,083
-Hong Kong
-258,510,084
-Hungary
-258,510,085
-Iceland
-258,510,086
-India
-258,510,087
-Indonesia
-258,510,088
-Iran, Islamic Republic of
-258,510,089
-Iraq
-258,510,090
-Ireland
-258,510,091
-Israel
-258,510,092
-Italy
-258,510,093
-Jamaica
-258,510,094
-Japan
-258,510,095
-Jordan
-258,510,096
-Kazakhstan
-258,510,097
-Kenya
-258,510,098
-Kiribati
-258,510,099
-Korea, Republic of
-258,510,100
-Kuwait
-258,510,101
-Kyrgyzstan
-258,510,102
-Lao, People's Democratic Republic of
-258,510,103
-Latvia
-258,510,104
-Lebanon
-258,510,105
-Lesotho
-258,510,106
-Liberia
-258,510,107
-Libyan Arab Jamahiriya
-258,510,108
-Liechtenstein
-258,510,109
-Lithuania
-258,510,110
-Luxembourg
-258,510,111
-Macedonia, Republic of
-258,510,112
-Madagascar
-258,510,113
-Malawi
-258,510,114
-Malaysia
-258,510,115
-Maldives
-258,510,116
-Mali
-258,510,117
-Malta
-258,510,118
-Marshall Islands
-258,510,119
-Mauritania
-258,510,120
-Mauritius
-258,510,121
+AUSTRALIA	258510003
+UNITED STATES OF AMERICA	258510000
+CANADA	258510004
+UNITED KINGDOM	258510001
+Afghanistan	258510005
+Albania	258510006
+Algeria	258510007
+Andorra	258510008
+Angola	258510009
+Antigua and Barbuda	258510010
+Argentina	258510011
+Armenia	258510012
+Aruba	258510013
+Austria	258510014
+Azerbaijan	258510015
+Bahamas	258510016
+Bahrain	258510017
+Bangladesh	258510018
+Barbados	258510019
+Belarus	258510020
+Belgium	258510021
+Belize	258510022
+Benin	258510023
+Bermuda	258510024
+Bhutan	258510025
+Bolivia	258510026
+Bosnia and Herzegovina	258510027
+Botswana	258510028
+Brazil	258510029
+Brunei	258510030
+Bulgaria	258510031
+Burkina Faso	258510032
+Burundi	258510033
+Cambodia	258510034
+Cameroon	258510035
+Cape Verde Island	258510037
+Cayman Islands	258510038
+Central African Republic	258510039
+Chad	258510040
+Chile	258510041
+China	258510042
+Colombia	258510043
+Comoro	258510044
+Congo, The Democratic Republic of the	258510046
+Congro	258510045
+Cook Islands	258510047
+Costa Rica	258510048
+Cote D'Ivoire	258510049
+Croatia	258510050
+Cuba	258510051
+Cyprus	258510052
+Czech Republic	258510053
+Denmark	258510054
+Djibouti	258510055
+Dominica	258510056
+Dominican Republic	258510057
+Ecuador	258510058
+Egypt	258510059
+El Salvador	258510060
+Equatorial Guinea	258510061
+Eritrea	258510062
+Estonia	258510063
+Ethiopia	258510064
+Figi	258510065
+Finland	258510066
+France	258510067
+French Polynesia	258510068
+Gabon	258510069
+Gambia	258510070
+Georgia	258510071
+Germany	258510072
+Ghana	258510073
+Greece	258510074
+Greenland	258510075
+Grenada	258510076
+Guatemala	258510077
+Guinea	258510078
+Guinea-Bissau	258510079
+Guyana	258510080
+Haiti	258510081
+Holy See (Vatican City State)	258510082
+Honduras	258510083
+Hong Kong	258510084
+Hungary	258510085
+Iceland	258510086
+India	258510087
+Indonesia	258510088
+Iran, Islamic Republic of	258510089
+Iraq	258510090
+Ireland	258510091
+Israel	258510092
+Italy	258510093
+Jamaica	258510094
+Japan	258510095
+Jordan	258510096
+Kazakhstan	258510097
+Kenya	258510098
+Kiribati	258510099
+Korea, Republic of	258510100
+Kuwait	258510101
+Kyrgyzstan	258510102
+Lao, People's Democratic Republic of	258510103
+Latvia	258510104
+Lebanon	258510105
+Lesotho	258510106
+Liberia	258510107
+Libyan Arab Jamahiriya	258510108
+Liechtenstein	258510109
+Lithuania	258510110
+Luxembourg	258510111
+Macedonia, Republic of	258510112
+Madagascar	258510113
+Malawi	258510114
+Malaysia	258510115
+Maldives	258510116
+Mali	258510117
+Malta	258510118
+Marshall Islands	258510119
+Mauritania	258510120
+Mauritius	258510121
+Mexico	258510122
+Micronesia	258510123
+Moldavia	258510124
+Monaco	258510125
+Mongolia	258510126
+Montserrat	258510127
+Morocco	258510128
+Mozambique	258510129
+Myanmar	258510130
+NEW ZEALAND	258510002
+Namibia	258510131
+Nauru	258510132
+Nepal	258510133
+Netherlands	258510134
+Netherlands Antilles	258510135
+New Caledonia	258510136
+Nicaragua	258510137
+Nigeria	258510138
+Niue	258510139
+North Korea	258510140
+Norway	258510141
+Oman	258510142
+Pakistan	258510143
+Panama	258510144
+Papua New Guinea	258510145
+Paraguay	258510146
+Peru	258510147
+Philippines	258510148
+Poland	258510149
+Portugal	258510150
+Qatar	258510151
+Romania	258510152
+Russia	258510153
+Rwanda	258510154
+Saint Kitts and Nevis	258510155
+Saint Lucia	258510156
+Samoa	258510157
+San Marino	258510158
+Sao Tomé and Principe	258510159
+Saudi Arabia	258510160
+Serbia and Montenegro	258510161
+Sierra Leone	258510162
+Singapore	258510163
+Slovakia	258510164
+Slovenia	258510165
+Solomon Islands	258510166
+Somalia	258510167
+South Africa	258510168
+Spain	258510169
+Sri Lanka	258510170
+Sudan	258510171
+Surinam	258510172
+Swaziland	258510173
+Sweden	258510174
+Switzerland	258510175
+Syria	258510176
+Taiwan, Province of China	258510177
+Tajikistan	258510178
+Tanzania, Untied Republic of	258510179
+Thailand	258510180
+Togo	258510181
+Tonga	258510182
+Trinidad and Tobago	258510183
+Tunisia	258510184
+Turkey	258510185
+Turkmenistan	258510186
+Turks and Caicos Islands	258510187
+Tuvalu	258510188
+Uganda	258510189
+Ukraine	258510190
+Uruguay	258510191
+Uzbekistan	258510192
+Venezuela	258510194
+Viet Nam	258510195
+Virgin Islands UK	258510196
+Virgin Islands US	258510197
+Yemen	258510198
+Zambia	258510199
+Zimbabwe	258510200
